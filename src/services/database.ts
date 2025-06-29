@@ -18,7 +18,7 @@ const isSupabaseConfigured = () => {
   return url && key && !url.includes('your-project-ref') && !key.includes('your-anon-key')
 }
 
-// Admin Authentication
+// Admin Authentication with enhanced error handling
 export const adminAuthService = {
   async signIn(username: string, password: string) {
     if (!isSupabaseConfigured()) {
@@ -28,12 +28,9 @@ export const adminAuthService = {
     try {
       console.log('Attempting admin authentication...')
       
-      // Set admin context before authentication
-      await supabase.rpc('set_admin_context')
-      
-      // Use existing authenticate_admin function
+      // Use the enhanced authentication function
       const { data, error } = await supabase
-        .rpc('authenticate_admin', { 
+        .rpc('authenticate_admin_enhanced', { 
           p_username: username, 
           p_password: password 
         })
@@ -54,21 +51,17 @@ export const adminAuthService = {
       // Store admin info in localStorage with authentication flag
       localStorage.setItem('admin_user', JSON.stringify(admin))
       localStorage.setItem('admin_authenticated', 'true')
-
-      // Update last login
-      try {
-        await supabase
-          .from('admin_users')
-          .update({ last_login: new Date().toISOString() })
-          .eq('id', admin.id)
-      } catch (updateError) {
-        console.warn('Failed to update last login:', updateError)
-      }
+      localStorage.setItem('admin_session_id', admin.session_id || Date.now().toString())
 
       return { user: null, admin }
     } catch (error) {
       console.error('Sign in error:', error)
-      await supabase.rpc('clear_admin_context')
+      // Clear any existing admin context
+      try {
+        await supabase.rpc('clear_admin_context')
+      } catch (clearError) {
+        console.warn('Failed to clear admin context:', clearError)
+      }
       throw error
     }
   },
@@ -81,6 +74,7 @@ export const adminAuthService = {
       // Clear localStorage
       localStorage.removeItem('admin_user')
       localStorage.removeItem('admin_authenticated')
+      localStorage.removeItem('admin_session_id')
       
       // Sign out from Supabase auth
       const { error } = await supabase.auth.signOut()
@@ -98,9 +92,21 @@ export const adminAuthService = {
       // Check localStorage first
       const savedAdmin = localStorage.getItem('admin_user')
       const isAuthenticated = localStorage.getItem('admin_authenticated')
+      const sessionId = localStorage.getItem('admin_session_id')
       
-      if (savedAdmin && isAuthenticated === 'true') {
-        return JSON.parse(savedAdmin)
+      if (savedAdmin && isAuthenticated === 'true' && sessionId) {
+        const admin = JSON.parse(savedAdmin)
+        
+        // Verify session is still valid (optional - could add server-side verification)
+        const sessionAge = Date.now() - parseInt(sessionId)
+        const maxSessionAge = 24 * 60 * 60 * 1000 // 24 hours
+        
+        if (sessionAge < maxSessionAge) {
+          return admin
+        } else {
+          // Session expired, clear it
+          this.signOut()
+        }
       }
       return null
     } catch (error) {
@@ -126,37 +132,7 @@ const getAuthenticatedClient = async () => {
   return supabase
 }
 
-// Helper function to handle product image updates via product_images table
-const handleProductImageUpdate = async (client: any, productId: string, imageUrl: string) => {
-  try {
-    // First, set all existing images as non-primary
-    await client
-      .from('product_images')
-      .update({ is_primary: false })
-      .eq('product_id', productId)
-
-    // Then insert or update the primary image
-    const { error: upsertError } = await client
-      .from('product_images')
-      .upsert({
-        product_id: productId,
-        image_url: imageUrl,
-        is_primary: true,
-        display_order: 0
-      }, {
-        onConflict: 'product_id,image_url'
-      })
-
-    if (upsertError) {
-      console.warn('Failed to upsert product image:', upsertError)
-    }
-  } catch (error) {
-    console.error('Error handling product image update:', error)
-    throw error
-  }
-}
-
-// Product services with real-time sync
+// Product services with enhanced error handling and validation
 export const productService = {
   async getAll() {
     if (!isSupabaseConfigured()) {
@@ -189,7 +165,11 @@ export const productService = {
         .eq('available', true)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching products:', error)
+        throw new Error(`Failed to fetch products: ${error.message}`)
+      }
+      
       return data || []
     } catch (error) {
       console.error('Error fetching products:', error)
@@ -228,7 +208,11 @@ export const productService = {
         `)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching admin products:', error)
+        throw new Error(`Failed to fetch products: ${error.message}`)
+      }
+      
       return data || []
     } catch (error) {
       console.error('Error fetching admin products:', error)
@@ -267,7 +251,11 @@ export const productService = {
         .eq('id', id)
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching product:', error)
+        throw new Error(`Failed to fetch product: ${error.message}`)
+      }
+      
       return data
     } catch (error) {
       console.error('Error fetching product:', error)
@@ -289,11 +277,27 @@ export const productService = {
 
       const client = await getAuthenticatedClient()
       
-      console.log('Creating product:', product)
+      console.log('Creating product with enhanced function:', product)
       
-      // Use the enhanced function for creating products with images
-      const { data, error } = await client.rpc('create_product_with_images', {
-        p_product_data: product,
+      // Validate required fields
+      if (!product.name || !product.description || !product.price || !product.category_id) {
+        throw new Error('Missing required fields: name, description, price, and category are required')
+      }
+
+      // Use the enhanced product creation function
+      const { data, error } = await client.rpc('create_product_enhanced', {
+        p_product_data: {
+          id: product.id,
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          category_id: product.category_id,
+          tags: (product.tags || []).join(', '),
+          unit: product.unit || 'kg',
+          available: product.available !== false,
+          featured: product.featured === true,
+          image: product.image || (images.length > 0 ? images[0] : '/images/placeholder.jpg')
+        },
         p_images: images
       })
 
@@ -303,6 +307,10 @@ export const productService = {
       }
 
       console.log('Product created successfully:', data)
+      
+      // Trigger a refresh event for real-time sync
+      window.dispatchEvent(new CustomEvent('productCreated', { detail: { data } }))
+      
       return data
     } catch (error) {
       console.error('Error creating product:', error)
@@ -318,55 +326,27 @@ export const productService = {
     try {
       const client = await getAuthenticatedClient()
       
-      // Extract image from updates since it's managed by triggers
-      const { image, ...productUpdates } = updates as any
+      console.log('Updating product with enhanced function:', id, updates)
       
-      console.log('Updating product:', id, 'with updates:', productUpdates)
-      
-      // Update the product without the image field
-      const { data, error } = await client
-        .from('products')
-        .update({
-          ...productUpdates,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id)
-        .select(`
-          *,
-          categories (
-            id,
-            name,
-            icon
-          ),
-          product_images (
-            id,
-            image_url,
-            alt_text,
-            display_order,
-            is_primary
-          ),
-          inventory (
-            quantity,
-            reserved_quantity,
-            reorder_level
-          )
-        `)
-        .single()
+      // Use the enhanced product update function
+      const { data, error } = await client.rpc('update_product_enhanced', {
+        p_product_id: id,
+        p_product_data: {
+          name: updates.name,
+          description: updates.description,
+          price: updates.price,
+          category_id: updates.category_id,
+          tags: Array.isArray(updates.tags) ? updates.tags.join(', ') : updates.tags,
+          unit: updates.unit,
+          available: updates.available,
+          featured: updates.featured,
+          image: (updates as any).image
+        }
+      })
 
       if (error) {
         console.error('Product update error:', error)
-        throw error
-      }
-
-      // Handle image update separately if provided
-      if (image) {
-        try {
-          await handleProductImageUpdate(client, id, image)
-          console.log('Product image updated successfully')
-        } catch (imageError) {
-          console.warn('Failed to update product image:', imageError)
-          // Don't throw here as the main product update succeeded
-        }
+        throw new Error(`Failed to update product: ${error.message}`)
       }
 
       console.log('Product updated successfully:', data)
@@ -394,7 +374,10 @@ export const productService = {
         .delete()
         .eq('id', id)
 
-      if (error) throw error
+      if (error) {
+        console.error('Product deletion error:', error)
+        throw new Error(`Failed to delete product: ${error.message}`)
+      }
       
       // Trigger a refresh event for real-time sync
       window.dispatchEvent(new CustomEvent('productDeleted', { detail: { id } }))
@@ -421,7 +404,11 @@ export const categoryService = {
         .eq('is_active', true)
         .order('display_order', { ascending: true })
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching categories:', error)
+        throw new Error(`Failed to fetch categories: ${error.message}`)
+      }
+      
       return data || []
     } catch (error) {
       console.error('Error fetching categories:', error)
@@ -441,7 +428,11 @@ export const categoryService = {
         .select('*')
         .order('display_order', { ascending: true })
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching admin categories:', error)
+        throw new Error(`Failed to fetch categories: ${error.message}`)
+      }
+      
       return data || []
     } catch (error) {
       console.error('Error fetching admin categories:', error)
@@ -479,7 +470,11 @@ export const productImageService = {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Error adding product image:', error)
+        throw new Error(`Failed to add product image: ${error.message}`)
+      }
+      
       return data
     } catch (error) {
       console.error('Error adding product image:', error)
@@ -503,7 +498,11 @@ export const inventoryService = {
         .eq('product_id', productId)
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching inventory:', error)
+        throw new Error(`Failed to fetch inventory: ${error.message}`)
+      }
+      
       return data
     } catch (error) {
       console.error('Error fetching inventory:', error)
@@ -525,7 +524,11 @@ export const inventoryService = {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Error updating inventory:', error)
+        throw new Error(`Failed to update inventory: ${error.message}`)
+      }
+      
       return data
     } catch (error) {
       console.error('Error updating inventory:', error)
@@ -558,7 +561,11 @@ export const inventoryService = {
 
       const { data, error } = await query
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching low stock items:', error)
+        throw new Error(`Failed to fetch low stock items: ${error.message}`)
+      }
+      
       return data || []
     } catch (error) {
       console.error('Error fetching low stock items:', error)
@@ -591,7 +598,11 @@ export const orderService = {
         `)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching orders:', error)
+        throw new Error(`Failed to fetch orders: ${error.message}`)
+      }
+      
       return data || []
     } catch (error) {
       console.error('Error fetching orders:', error)
@@ -612,7 +623,11 @@ export const orderService = {
         .order('created_at', { ascending: false })
         .limit(limit)
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching recent orders:', error)
+        throw new Error(`Failed to fetch recent orders: ${error.message}`)
+      }
+      
       return data || []
     } catch (error) {
       console.error('Error fetching recent orders:', error)
@@ -637,7 +652,11 @@ export const orderService = {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Error updating order status:', error)
+        throw new Error(`Failed to update order status: ${error.message}`)
+      }
+      
       return data
     } catch (error) {
       console.error('Error updating order status:', error)
@@ -717,7 +736,11 @@ export const analyticsService = {
 
       const { data, error } = await query
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching business analytics:', error)
+        throw new Error(`Failed to fetch business analytics: ${error.message}`)
+      }
+      
       return data || []
     } catch (error) {
       console.error('Error fetching business analytics:', error)

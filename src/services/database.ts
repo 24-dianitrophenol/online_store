@@ -28,9 +28,9 @@ export const adminAuthService = {
     try {
       console.log('Attempting admin authentication...')
       
-      // Use the enhanced authentication function
+      // Use the standard authentication function with correct parameter order
       const { data, error } = await supabase
-        .rpc('authenticate_admin_enhanced', { 
+        .rpc('authenticate_admin', { 
           p_username: username, 
           p_password: password 
         })

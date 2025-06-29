@@ -126,6 +126,91 @@ const getAuthenticatedClient = async () => {
   return supabase
 }
 
+// Helper function to safely update products without the image column
+const safeProductUpdate = async (client: any, id: string, updates: any) => {
+  try {
+    // First, try with all fields including image
+    const { data, error } = await client
+      .from('products')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      // If error mentions image column, try without it
+      if (error.message?.includes("'image' column") || error.code === 'PGRST204') {
+        console.warn('Image column not found in schema, updating without image field')
+        
+        // Remove image from updates and try again
+        const { image, ...updatesWithoutImage } = updates
+        
+        const { data: retryData, error: retryError } = await client
+          .from('products')
+          .update({
+            ...updatesWithoutImage,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id)
+          .select()
+          .single()
+
+        if (retryError) throw retryError
+
+        // If we had an image to update, handle it separately via product_images table
+        if (image) {
+          try {
+            await handleProductImageUpdate(client, id, image)
+          } catch (imageError) {
+            console.warn('Failed to update product image separately:', imageError)
+          }
+        }
+
+        return retryData
+      }
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error('Error in safeProductUpdate:', error)
+    throw error
+  }
+}
+
+// Helper function to handle product image updates via product_images table
+const handleProductImageUpdate = async (client: any, productId: string, imageUrl: string) => {
+  try {
+    // First, set all existing images as non-primary
+    await client
+      .from('product_images')
+      .update({ is_primary: false })
+      .eq('product_id', productId)
+
+    // Then insert or update the primary image
+    const { error: upsertError } = await client
+      .from('product_images')
+      .upsert({
+        product_id: productId,
+        image_url: imageUrl,
+        is_primary: true,
+        display_order: 0
+      }, {
+        onConflict: 'product_id,image_url'
+      })
+
+    if (upsertError) {
+      console.warn('Failed to upsert product image:', upsertError)
+    }
+  } catch (error) {
+    console.error('Error handling product image update:', error)
+    throw error
+  }
+}
+
 // Product services with real-time sync
 export const productService = {
   async getAll() {
@@ -288,17 +373,8 @@ export const productService = {
     try {
       const client = await getAuthenticatedClient()
       
-      const { data, error } = await client
-        .from('products')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) throw error
+      // Use the safe update function that handles schema mismatches
+      const data = await safeProductUpdate(client, id, updates)
       
       // Trigger a refresh event for real-time sync
       window.dispatchEvent(new CustomEvent('productUpdated', { detail: { id, data } }))
@@ -306,6 +382,14 @@ export const productService = {
       return data
     } catch (error) {
       console.error('Error updating product:', error)
+      
+      // Provide more specific error messages
+      if (error.message?.includes("'image' column")) {
+        throw new Error('Database schema mismatch detected. Please refresh your Supabase schema cache in the dashboard.')
+      } else if (error.code === 'PGRST204') {
+        throw new Error('Column not found in database schema. Please check your database configuration.')
+      }
+      
       throw error
     }
   },

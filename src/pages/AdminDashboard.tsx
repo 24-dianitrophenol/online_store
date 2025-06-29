@@ -24,7 +24,8 @@ import {
   Package2,
   Menu,
   Image as ImageIcon,
-  Upload
+  Upload,
+  RefreshCw
 } from 'lucide-react';
 import { adminAuthService, productService, categoryService, orderService, analyticsService } from '../services/database';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -226,6 +227,7 @@ const ProductsManagement: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [schemaError, setSchemaError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     id: '',
@@ -266,6 +268,7 @@ const ProductsManagement: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setUploading(true);
+    setSchemaError(null);
 
     try {
       const productData = {
@@ -290,7 +293,17 @@ const ProductsManagement: React.FC = () => {
       resetForm();
     } catch (error) {
       console.error('Error saving product:', error);
-      alert('Error saving product. Please try again.');
+      
+      // Check for schema-related errors
+      if (error instanceof Error) {
+        if (error.message.includes('schema cache') || error.message.includes('column not found')) {
+          setSchemaError('Database schema issue detected. Please refresh your Supabase schema cache in the dashboard, then try again.');
+        } else {
+          alert(`Error saving product: ${error.message}`);
+        }
+      } else {
+        alert('Error saving product. Please try again.');
+      }
     } finally {
       setUploading(false);
     }
@@ -311,6 +324,7 @@ const ProductsManagement: React.FC = () => {
     setProductImage('');
     setEditingProduct(null);
     setShowAddForm(false);
+    setSchemaError(null);
   };
 
   const handleEdit = (product: any) => {
@@ -328,6 +342,7 @@ const ProductsManagement: React.FC = () => {
     setProductImage(product.image || '');
     setEditingProduct(product);
     setShowAddForm(true);
+    setSchemaError(null);
   };
 
   const handleDelete = async (productId: string) => {
@@ -389,6 +404,36 @@ const ProductsManagement: React.FC = () => {
           Add Product
         </button>
       </div>
+
+      {/* Schema Error Alert */}
+      {schemaError && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+            <div>
+              <h3 className="font-semibold text-red-800 dark:text-red-200">Schema Error</h3>
+              <p className="text-red-700 dark:text-red-300 text-sm mt-1">{schemaError}</p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => setSchemaError(null)}
+                  className="text-sm px-3 py-1 bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-700 transition-colors"
+                >
+                  Dismiss
+                </button>
+                <a
+                  href="https://supabase.com/dashboard"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-1"
+                >
+                  <RefreshCw size={14} />
+                  Open Supabase Dashboard
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">

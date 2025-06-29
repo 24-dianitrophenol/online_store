@@ -11,9 +11,95 @@ type Order = Tables['orders']['Row']
 type OrderItem = Tables['order_items']['Row']
 type BusinessAnalytics = Tables['business_analytics']['Row']
 
+// Check if Supabase is properly configured
+const isSupabaseConfigured = () => {
+  const url = import.meta.env.VITE_SUPABASE_URL
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+  return url && key && !url.includes('your-project-ref') && !key.includes('your-anon-key')
+}
+
+// Fallback data for when Supabase is not configured
+const fallbackCategories = [
+  { id: '1', name: 'Fruits', description: 'Fresh fruits', icon: '🍎', display_order: 1, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: '2', name: 'Vegetables', description: 'Fresh vegetables', icon: '🥕', display_order: 2, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: '3', name: 'Dairy', description: 'Dairy products', icon: '🥛', display_order: 3, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: '4', name: 'Bakery', description: 'Baked goods', icon: '🍞', display_order: 4, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+]
+
+const fallbackProducts = [
+  {
+    id: '1',
+    name: 'Fresh Apples',
+    description: 'Crisp and sweet red apples',
+    price: 2.99,
+    image: '/images/1.jpg',
+    category_id: '1',
+    tags: ['fresh', 'organic'],
+    available: true,
+    featured: true,
+    rating: 4.5,
+    unit: 'lb',
+    bulk_pricing: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: '2',
+    name: 'Organic Bananas',
+    description: 'Yellow ripe bananas',
+    price: 1.99,
+    image: '/images/2.jpg',
+    category_id: '1',
+    tags: ['organic', 'potassium'],
+    available: true,
+    featured: false,
+    rating: 4.2,
+    unit: 'bunch',
+    bulk_pricing: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: '3',
+    name: 'Fresh Carrots',
+    description: 'Crunchy orange carrots',
+    price: 1.49,
+    image: '/images/3.jpg',
+    category_id: '2',
+    tags: ['fresh', 'vitamin-a'],
+    available: true,
+    featured: false,
+    rating: 4.0,
+    unit: 'lb',
+    bulk_pricing: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: '4',
+    name: 'Whole Milk',
+    description: 'Fresh whole milk',
+    price: 3.49,
+    image: '/images/4.jpg',
+    category_id: '3',
+    tags: ['dairy', 'calcium'],
+    available: true,
+    featured: true,
+    rating: 4.3,
+    unit: 'gallon',
+    bulk_pricing: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+]
+
 // Admin Authentication - Use existing functions
 export const adminAuthService = {
   async signIn(username: string, password: string) {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
+    }
+
     try {
       console.log('Attempting admin authentication...')
       
@@ -63,6 +149,13 @@ export const adminAuthService = {
   },
 
   async signOut() {
+    if (!isSupabaseConfigured()) {
+      // Clear localStorage even if Supabase is not configured
+      localStorage.removeItem('admin_user')
+      localStorage.removeItem('admin_authenticated')
+      return
+    }
+
     try {
       // Clear admin context
       await supabase.rpc('clear_admin_context')
@@ -101,6 +194,10 @@ export const adminAuthService = {
 
 // Enhanced Supabase client with admin context
 const getAuthenticatedClient = async () => {
+  if (!isSupabaseConfigured()) {
+    return supabase
+  }
+
   const isAdminAuthenticated = localStorage.getItem('admin_authenticated') === 'true'
   
   if (isAdminAuthenticated) {
@@ -118,6 +215,16 @@ const getAuthenticatedClient = async () => {
 // Product services
 export const productService = {
   async getAll() {
+    if (!isSupabaseConfigured()) {
+      console.warn('Supabase not configured, using fallback data')
+      return fallbackProducts.map(product => ({
+        ...product,
+        categories: fallbackCategories.find(cat => cat.id === product.category_id),
+        product_images: [],
+        inventory: [{ quantity: 100, reserved_quantity: 0, reorder_level: 10 }]
+      }))
+    }
+
     try {
       const { data, error } = await supabase
         .from('products')
@@ -148,11 +255,27 @@ export const productService = {
       return data || []
     } catch (error) {
       console.error('Error fetching products:', error)
-      return []
+      console.warn('Falling back to demo data')
+      return fallbackProducts.map(product => ({
+        ...product,
+        categories: fallbackCategories.find(cat => cat.id === product.category_id),
+        product_images: [],
+        inventory: [{ quantity: 100, reserved_quantity: 0, reorder_level: 10 }]
+      }))
     }
   },
 
   async getAllForAdmin() {
+    if (!isSupabaseConfigured()) {
+      console.warn('Supabase not configured, using fallback data')
+      return fallbackProducts.map(product => ({
+        ...product,
+        categories: fallbackCategories.find(cat => cat.id === product.category_id),
+        product_images: [],
+        inventory: [{ quantity: 100, reserved_quantity: 0, reorder_level: 10 }]
+      }))
+    }
+
     try {
       const client = await getAuthenticatedClient()
       const { data, error } = await client
@@ -183,11 +306,27 @@ export const productService = {
       return data || []
     } catch (error) {
       console.error('Error fetching admin products:', error)
-      return []
+      return fallbackProducts.map(product => ({
+        ...product,
+        categories: fallbackCategories.find(cat => cat.id === product.category_id),
+        product_images: [],
+        inventory: [{ quantity: 100, reserved_quantity: 0, reorder_level: 10 }]
+      }))
     }
   },
 
   async getById(id: string) {
+    if (!isSupabaseConfigured()) {
+      const product = fallbackProducts.find(p => p.id === id)
+      if (!product) throw new Error('Product not found')
+      return {
+        ...product,
+        categories: fallbackCategories.find(cat => cat.id === product.category_id),
+        product_images: [],
+        inventory: [{ quantity: 100, reserved_quantity: 0, reorder_level: 10 }]
+      }
+    }
+
     try {
       const { data, error } = await supabase
         .from('products')
@@ -223,6 +362,10 @@ export const productService = {
   },
 
   async create(product: Tables['products']['Insert'], images: string[] = []) {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
+    }
+
     try {
       // Ensure admin is authenticated
       const admin = await adminAuthService.getCurrentAdmin()
@@ -286,6 +429,10 @@ export const productService = {
   },
 
   async update(id: string, updates: Tables['products']['Update']) {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
+    }
+
     try {
       const client = await getAuthenticatedClient()
       
@@ -305,6 +452,10 @@ export const productService = {
   },
 
   async delete(id: string) {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
+    }
+
     try {
       const client = await getAuthenticatedClient()
       
@@ -325,6 +476,11 @@ export const productService = {
 // Category services
 export const categoryService = {
   async getAll() {
+    if (!isSupabaseConfigured()) {
+      console.warn('Supabase not configured, using fallback data')
+      return fallbackCategories
+    }
+
     try {
       const { data, error } = await supabase
         .from('categories')
@@ -336,11 +492,17 @@ export const categoryService = {
       return data || []
     } catch (error) {
       console.error('Error fetching categories:', error)
-      return []
+      console.warn('Falling back to demo data')
+      return fallbackCategories
     }
   },
 
   async getAllForAdmin() {
+    if (!isSupabaseConfigured()) {
+      console.warn('Supabase not configured, using fallback data')
+      return fallbackCategories
+    }
+
     try {
       const client = await getAuthenticatedClient()
       const { data, error } = await client
@@ -352,7 +514,7 @@ export const categoryService = {
       return data || []
     } catch (error) {
       console.error('Error fetching admin categories:', error)
-      return []
+      return fallbackCategories
     }
   }
 }
@@ -360,6 +522,10 @@ export const categoryService = {
 // Product Images services
 export const productImageService = {
   async add(productId: string, imageUrl: string, altText?: string, isPrimary = false) {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
+    }
+
     try {
       const client = await getAuthenticatedClient()
       
@@ -394,6 +560,10 @@ export const productImageService = {
 // Inventory services
 export const inventoryService = {
   async getByProductId(productId: string) {
+    if (!isSupabaseConfigured()) {
+      return { quantity: 100, reserved_quantity: 0, reorder_level: 10 }
+    }
+
     try {
       const client = await getAuthenticatedClient()
       const { data, error } = await client
@@ -411,6 +581,10 @@ export const inventoryService = {
   },
 
   async update(productId: string, updates: Tables['inventory']['Update']) {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
+    }
+
     try {
       const client = await getAuthenticatedClient()
       const { data, error } = await client
@@ -429,6 +603,10 @@ export const inventoryService = {
   },
 
   async getLowStock(threshold?: number) {
+    if (!isSupabaseConfigured()) {
+      return []
+    }
+
     try {
       const client = await getAuthenticatedClient()
       let query = client
@@ -461,6 +639,10 @@ export const inventoryService = {
 // Order services
 export const orderService = {
   async getAll() {
+    if (!isSupabaseConfigured()) {
+      return []
+    }
+
     try {
       const client = await getAuthenticatedClient()
       const { data, error } = await client
@@ -487,6 +669,10 @@ export const orderService = {
   },
 
   async getRecent(limit = 10) {
+    if (!isSupabaseConfigured()) {
+      return []
+    }
+
     try {
       const client = await getAuthenticatedClient()
       const { data, error } = await client
@@ -504,6 +690,10 @@ export const orderService = {
   },
 
   async updateStatus(orderId: string, status: string) {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
+    }
+
     try {
       const client = await getAuthenticatedClient()
       const { data, error } = await client
@@ -528,6 +718,17 @@ export const orderService = {
 // Analytics services
 export const analyticsService = {
   async getDashboardStats() {
+    if (!isSupabaseConfigured()) {
+      return {
+        today: { total_revenue: 0, total_orders: 0, total_customers: 0 },
+        monthly: [],
+        totalProducts: fallbackProducts.length,
+        activeProducts: fallbackProducts.filter(p => p.available).length,
+        lowStockItems: [],
+        recentOrders: []
+      }
+    }
+
     try {
       const client = await getAuthenticatedClient()
       
@@ -572,6 +773,10 @@ export const analyticsService = {
   },
 
   async getBusinessAnalytics(startDate?: string, endDate?: string) {
+    if (!isSupabaseConfigured()) {
+      return []
+    }
+
     try {
       const client = await getAuthenticatedClient()
       let query = client
@@ -599,6 +804,10 @@ export const analyticsService = {
 
 // Enhanced image upload helper with better error handling
 export const uploadImage = async (file: File, bucket: string = 'product-images'): Promise<string> => {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase is not configured. Please connect to Supabase first.')
+  }
+
   try {
     // Ensure admin is authenticated
     const admin = await adminAuthService.getCurrentAdmin()
@@ -637,6 +846,10 @@ export const uploadImage = async (file: File, bucket: string = 'product-images')
 
 // Delete image helper
 export const deleteImage = async (url: string, bucket: string = 'product-images'): Promise<void> => {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Supabase is not configured. Please connect to Supabase first.')
+  }
+
   try {
     const fileName = url.split('/').pop()
     if (!fileName) return

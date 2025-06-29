@@ -3,17 +3,28 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+// Check if environment variables are properly configured
+const isConfigured = supabaseUrl && supabaseAnonKey && 
+  !supabaseUrl.includes('your-project-ref') && 
+  !supabaseAnonKey.includes('your-anon-key')
+
+if (!isConfigured) {
+  console.warn('Supabase environment variables are not properly configured. Using placeholder client.')
+  console.warn('Please click "Connect to Supabase" button to set up your project.')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false
+// Create client with fallback values to prevent errors
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseAnonKey || 'placeholder-key',
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false
+    }
   }
-})
+)
 
 // Database types
 export interface Database {
@@ -346,6 +357,10 @@ export interface Database {
 
 // Image upload helper
 export const uploadImage = async (file: File, bucket: string = 'product-images'): Promise<string> => {
+  if (!isConfigured) {
+    throw new Error('Supabase is not configured. Please connect to Supabase first.')
+  }
+
   const fileExt = file.name.split('.').pop()
   const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
   const filePath = `${fileName}`
@@ -367,6 +382,10 @@ export const uploadImage = async (file: File, bucket: string = 'product-images')
 
 // Delete image helper
 export const deleteImage = async (url: string, bucket: string = 'product-images'): Promise<void> => {
+  if (!isConfigured) {
+    throw new Error('Supabase is not configured. Please connect to Supabase first.')
+  }
+
   const fileName = url.split('/').pop()
   if (!fileName) return
 

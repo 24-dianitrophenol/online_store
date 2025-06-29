@@ -126,61 +126,6 @@ const getAuthenticatedClient = async () => {
   return supabase
 }
 
-// Helper function to safely update products without the image column
-const safeProductUpdate = async (client: any, id: string, updates: any) => {
-  try {
-    // First, try with all fields including image
-    const { data, error } = await client
-      .from('products')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) {
-      // If error mentions image column, try without it
-      if (error.message?.includes("'image' column") || error.code === 'PGRST204') {
-        console.warn('Image column not found in schema, updating without image field')
-        
-        // Remove image from updates and try again
-        const { image, ...updatesWithoutImage } = updates
-        
-        const { data: retryData, error: retryError } = await client
-          .from('products')
-          .update({
-            ...updatesWithoutImage,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', id)
-          .select()
-          .single()
-
-        if (retryError) throw retryError
-
-        // If we had an image to update, handle it separately via product_images table
-        if (image) {
-          try {
-            await handleProductImageUpdate(client, id, image)
-          } catch (imageError) {
-            console.warn('Failed to update product image separately:', imageError)
-          }
-        }
-
-        return retryData
-      }
-      throw error
-    }
-
-    return data
-  } catch (error) {
-    console.error('Error in safeProductUpdate:', error)
-    throw error
-  }
-}
-
 // Helper function to handle product image updates via product_images table
 const handleProductImageUpdate = async (client: any, productId: string, imageUrl: string) => {
   try {
@@ -373,8 +318,58 @@ export const productService = {
     try {
       const client = await getAuthenticatedClient()
       
-      // Use the safe update function that handles schema mismatches
-      const data = await safeProductUpdate(client, id, updates)
+      // Extract image from updates since it's managed by triggers
+      const { image, ...productUpdates } = updates as any
+      
+      console.log('Updating product:', id, 'with updates:', productUpdates)
+      
+      // Update the product without the image field
+      const { data, error } = await client
+        .from('products')
+        .update({
+          ...productUpdates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            icon
+          ),
+          product_images (
+            id,
+            image_url,
+            alt_text,
+            display_order,
+            is_primary
+          ),
+          inventory (
+            quantity,
+            reserved_quantity,
+            reorder_level
+          )
+        `)
+        .single()
+
+      if (error) {
+        console.error('Product update error:', error)
+        throw error
+      }
+
+      // Handle image update separately if provided
+      if (image) {
+        try {
+          await handleProductImageUpdate(client, id, image)
+          console.log('Product image updated successfully')
+        } catch (imageError) {
+          console.warn('Failed to update product image:', imageError)
+          // Don't throw here as the main product update succeeded
+        }
+      }
+
+      console.log('Product updated successfully:', data)
       
       // Trigger a refresh event for real-time sync
       window.dispatchEvent(new CustomEvent('productUpdated', { detail: { id, data } }))
@@ -382,14 +377,6 @@ export const productService = {
       return data
     } catch (error) {
       console.error('Error updating product:', error)
-      
-      // Provide more specific error messages
-      if (error.message?.includes("'image' column")) {
-        throw new Error('Database schema mismatch detected. Please refresh your Supabase schema cache in the dashboard.')
-      } else if (error.code === 'PGRST204') {
-        throw new Error('Column not found in database schema. Please check your database configuration.')
-      }
-      
       throw error
     }
   },

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { productService, categoryService, syncService } from '../services/database'
+import { databaseFixService } from '../services/databaseFix'
 import { isSupabaseConfigured } from '../lib/supabase'
 import type { Database } from '../lib/supabase'
 
@@ -45,22 +46,44 @@ const convertCategory = (dbCategory: Category): any => ({
   icon: dbCategory.icon
 })
 
-// Enhanced products hook with real-time sync
+// Enhanced products hook with real-time sync and error recovery
 export const useProducts = () => {
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
-  const fetchProducts = useCallback(async () => {
+  const fetchProducts = useCallback(async (isRetry = false) => {
     try {
-      setLoading(true)
+      if (!isRetry) {
+        setLoading(true)
+      }
       setError(null)
+      
       const data = await productService.getAll()
       setProducts(data.map(convertProduct))
+      setRetryCount(0) // Reset retry count on success
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch products'
-      setError(errorMessage)
       console.error('Error fetching products:', err)
+      
+      // If it's a database schema error, try to fix it
+      if (errorMessage.includes('column "image" does not exist') || errorMessage.includes('42703')) {
+        console.log('Detected image column error, attempting to fix...')
+        try {
+          await databaseFixService.setupDatabase()
+          // Retry after fixing
+          if (retryCount < 2) {
+            setRetryCount(prev => prev + 1)
+            setTimeout(() => fetchProducts(true), 1000)
+            return
+          }
+        } catch (fixError) {
+          console.error('Failed to fix database:', fixError)
+        }
+      }
+      
+      setError(errorMessage)
       
       // If Supabase is not configured, don't treat it as an error
       if (!isSupabaseConfigured()) {
@@ -69,7 +92,7 @@ export const useProducts = () => {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [retryCount])
 
   useEffect(() => {
     fetchProducts()
@@ -80,21 +103,23 @@ export const useProducts = () => {
     if (isSupabaseConfigured()) {
       unsubscribe = syncService.subscribeToProductChanges((payload) => {
         console.log('Product change detected:', payload)
-        fetchProducts() // Refresh products on any change
+        fetchProducts(true) // Refresh products on any change
       })
     }
 
     // Listen for manual refresh events
-    const handleRefresh = () => fetchProducts()
+    const handleRefresh = () => fetchProducts(true)
     window.addEventListener('refreshProducts', handleRefresh)
     window.addEventListener('productUpdated', handleRefresh)
     window.addEventListener('productDeleted', handleRefresh)
+    window.addEventListener('databaseFixed', handleRefresh)
 
     return () => {
       unsubscribe?.()
       window.removeEventListener('refreshProducts', handleRefresh)
       window.removeEventListener('productUpdated', handleRefresh)
       window.removeEventListener('productDeleted', handleRefresh)
+      window.removeEventListener('databaseFixed', handleRefresh)
     }
   }, [fetchProducts])
 
@@ -140,12 +165,13 @@ export const useProductUpdates = () => {
   const triggerUpdate = useCallback(() => {
     setLastUpdate(new Date())
     syncService.triggerProductRefresh()
+    window.dispatchEvent(new CustomEvent('databaseFixed'))
   }, [])
 
   return { lastUpdate, triggerUpdate }
 }
 
-// Enhanced admin products hook with real-time sync
+// Enhanced admin products hook with real-time sync and error recovery
 export const useAdminProducts = () => {
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -161,6 +187,18 @@ export const useAdminProducts = () => {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch admin products'
       setError(errorMessage)
       console.error('Error fetching admin products:', err)
+      
+      // Try to fix database issues
+      if (errorMessage.includes('column "image" does not exist') || errorMessage.includes('42703')) {
+        try {
+          await databaseFixService.setupDatabase()
+          // Retry after fixing
+          setTimeout(() => fetchProducts(), 1000)
+          return
+        } catch (fixError) {
+          console.error('Failed to fix database:', fixError)
+        }
+      }
     } finally {
       setLoading(false)
     }
@@ -171,6 +209,7 @@ export const useAdminProducts = () => {
       await productService.create(productData, images)
       await fetchProducts() // Refresh the list
       syncService.triggerProductRefresh() // Trigger refresh on main website
+      window.dispatchEvent(new CustomEvent('databaseFixed'))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create product'
       throw new Error(errorMessage)
@@ -182,6 +221,7 @@ export const useAdminProducts = () => {
       await productService.update(id, updates)
       await fetchProducts() // Refresh the list
       syncService.triggerProductRefresh() // Trigger refresh on main website
+      window.dispatchEvent(new CustomEvent('databaseFixed'))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update product'
       throw new Error(errorMessage)
@@ -193,6 +233,7 @@ export const useAdminProducts = () => {
       await productService.delete(id)
       await fetchProducts() // Refresh the list
       syncService.triggerProductRefresh() // Trigger refresh on main website
+      window.dispatchEvent(new CustomEvent('databaseFixed'))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete product'
       throw new Error(errorMessage)
@@ -215,10 +256,12 @@ export const useAdminProducts = () => {
     // Listen for manual refresh events
     const handleRefresh = () => fetchProducts()
     window.addEventListener('refreshProducts', handleRefresh)
+    window.addEventListener('databaseFixed', handleRefresh)
 
     return () => {
       unsubscribe?.()
       window.removeEventListener('refreshProducts', handleRefresh)
+      window.removeEventListener('databaseFixed', handleRefresh)
     }
   }, [fetchProducts])
 
@@ -236,23 +279,40 @@ export const useAdminProducts = () => {
 // Hook for Supabase connection status
 export const useSupabaseStatus = () => {
   const [isConfigured, setIsConfigured] = useState(isSupabaseConfigured())
+  const [databaseStatus, setDatabaseStatus] = useState<'connected' | 'disconnected' | 'error'>('disconnected')
 
   useEffect(() => {
-    const checkStatus = () => {
-      setIsConfigured(isSupabaseConfigured())
+    const checkStatus = async () => {
+      const configured = isSupabaseConfigured()
+      setIsConfigured(configured)
+      
+      if (configured) {
+        try {
+          const result = await databaseFixService.checkDatabaseSchema()
+          setDatabaseStatus(result.success ? 'connected' : 'error')
+        } catch {
+          setDatabaseStatus('error')
+        }
+      } else {
+        setDatabaseStatus('disconnected')
+      }
     }
 
+    checkStatus()
+
     // Check status periodically
-    const interval = setInterval(checkStatus, 5000)
+    const interval = setInterval(checkStatus, 10000)
 
     // Listen for configuration changes
     window.addEventListener('supabaseConfigured', checkStatus)
+    window.addEventListener('databaseFixed', checkStatus)
 
     return () => {
       clearInterval(interval)
       window.removeEventListener('supabaseConfigured', checkStatus)
+      window.removeEventListener('databaseFixed', checkStatus)
     }
   }, [])
 
-  return { isConfigured }
+  return { isConfigured, databaseStatus }
 }

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Upload, X, Image as ImageIcon, Loader2, AlertCircle, Check } from 'lucide-react';
-import { uploadImage, deleteImage, getOptimizedImageUrl } from '../../lib/supabase';
+import { uploadImage, deleteImage, getOptimizedImageUrl, isSupabaseConfigured } from '../../lib/supabase';
 
 interface ImageUploadProps {
   onImageUploaded: (url: string) => void;
@@ -39,6 +39,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isDisabled = disabled || !isSupabaseConfigured();
+
   const resetUploadState = () => {
     setUploadState({
       uploading: false,
@@ -64,7 +66,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   };
 
   const handleFileUpload = async (files: FileList) => {
-    if (files.length === 0) return;
+    if (files.length === 0 || isDisabled) return;
 
     const file = files[0];
     const validationError = validateFile(file);
@@ -119,7 +121,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   };
 
   const handleRemoveImage = async () => {
-    if (!currentImage) return;
+    if (!currentImage || isDisabled) return;
 
     try {
       await deleteImage(currentImage);
@@ -141,7 +143,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   const handleDragIn = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+    if (!isDisabled && e.dataTransfer.items && e.dataTransfer.items.length > 0) {
       setDragActive(true);
     }
   };
@@ -157,25 +159,37 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     e.stopPropagation();
     setDragActive(false);
     
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    if (!isDisabled && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFileUpload(e.dataTransfer.files);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
+    if (!isDisabled && e.target.files && e.target.files.length > 0) {
       handleFileUpload(e.target.files);
     }
   };
 
   const openFileDialog = () => {
-    if (!disabled && fileInputRef.current) {
+    if (!isDisabled && fileInputRef.current) {
       fileInputRef.current.click();
     }
   };
 
   return (
     <div className={`space-y-4 ${className}`}>
+      {/* Configuration Warning */}
+      {!isSupabaseConfigured() && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="text-yellow-600 dark:text-yellow-400 flex-shrink-0" size={16} />
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              Image upload requires Supabase connection
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Current Image Display */}
       {currentImage && (
         <div className="relative group">
@@ -184,11 +198,18 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
               src={getOptimizedImageUrl(currentImage, 400, 300, 80)}
               alt="Current product image"
               className="w-full h-48 object-cover"
+              onError={(e) => {
+                // Fallback to original URL if optimization fails
+                const target = e.target as HTMLImageElement;
+                if (target.src !== currentImage) {
+                  target.src = currentImage;
+                }
+              }}
             />
             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center">
               <button
                 onClick={handleRemoveImage}
-                disabled={disabled || uploadState.uploading}
+                disabled={isDisabled || uploadState.uploading}
                 className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:opacity-50"
                 title="Remove image"
               >
@@ -202,11 +223,11 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       {/* Upload Area */}
       <div
         className={`relative border-2 border-dashed rounded-lg p-6 transition-all duration-200 ${
-          dragActive
+          dragActive && !isDisabled
             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
             : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
         } ${
-          disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+          isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
         }`}
         onDragEnter={handleDragIn}
         onDragLeave={handleDragOut}
@@ -219,7 +240,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
           type="file"
           accept={accept}
           onChange={handleFileSelect}
-          disabled={disabled}
+          disabled={isDisabled}
           className="hidden"
         />
 
@@ -263,11 +284,16 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                   {currentImage ? 'Replace image' : 'Upload product image'}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Drag and drop an image here, or click to browse
+                  {isDisabled 
+                    ? 'Connect to Supabase to enable image upload'
+                    : 'Drag and drop an image here, or click to browse'
+                  }
                 </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500">
-                  Supports: JPEG, PNG, WebP, GIF (max {maxSize}MB)
-                </p>
+                {!isDisabled && (
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    Supports: JPEG, PNG, WebP, GIF (max {maxSize}MB)
+                  </p>
+                )}
               </div>
             </div>
           )}

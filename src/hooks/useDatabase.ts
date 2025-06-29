@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { productService, categoryService } from '../services/database'
+import { useState, useEffect, useCallback } from 'react'
+import { productService, categoryService, syncService } from '../services/database'
 import { isSupabaseConfigured } from '../lib/supabase'
 import type { Database } from '../lib/supabase'
 
@@ -45,12 +45,13 @@ const convertCategory = (dbCategory: Category): any => ({
   icon: dbCategory.icon
 })
 
+// Enhanced products hook with real-time sync
 export const useProducts = () => {
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -68,11 +69,34 @@ export const useProducts = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchProducts()
-  }, [])
+
+    // Set up real-time sync if Supabase is configured
+    let unsubscribe: (() => void) | undefined
+
+    if (isSupabaseConfigured()) {
+      unsubscribe = syncService.subscribeToProductChanges((payload) => {
+        console.log('Product change detected:', payload)
+        fetchProducts() // Refresh products on any change
+      })
+    }
+
+    // Listen for manual refresh events
+    const handleRefresh = () => fetchProducts()
+    window.addEventListener('refreshProducts', handleRefresh)
+    window.addEventListener('productUpdated', handleRefresh)
+    window.addEventListener('productDeleted', handleRefresh)
+
+    return () => {
+      unsubscribe?.()
+      window.removeEventListener('refreshProducts', handleRefresh)
+      window.removeEventListener('productUpdated', handleRefresh)
+      window.removeEventListener('productDeleted', handleRefresh)
+    }
+  }, [fetchProducts])
 
   return { products, loading, error, refetch: fetchProducts }
 }
@@ -113,20 +137,21 @@ export const useCategories = () => {
 export const useProductUpdates = () => {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
 
-  const triggerUpdate = () => {
+  const triggerUpdate = useCallback(() => {
     setLastUpdate(new Date())
-  }
+    syncService.triggerProductRefresh()
+  }, [])
 
   return { lastUpdate, triggerUpdate }
 }
 
-// Hook for admin product management
+// Enhanced admin products hook with real-time sync
 export const useAdminProducts = () => {
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -139,12 +164,13 @@ export const useAdminProducts = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   const createProduct = async (productData: any, images: string[] = []) => {
     try {
       await productService.create(productData, images)
       await fetchProducts() // Refresh the list
+      syncService.triggerProductRefresh() // Trigger refresh on main website
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create product'
       throw new Error(errorMessage)
@@ -155,6 +181,7 @@ export const useAdminProducts = () => {
     try {
       await productService.update(id, updates)
       await fetchProducts() // Refresh the list
+      syncService.triggerProductRefresh() // Trigger refresh on main website
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update product'
       throw new Error(errorMessage)
@@ -165,6 +192,7 @@ export const useAdminProducts = () => {
     try {
       await productService.delete(id)
       await fetchProducts() // Refresh the list
+      syncService.triggerProductRefresh() // Trigger refresh on main website
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete product'
       throw new Error(errorMessage)
@@ -173,7 +201,26 @@ export const useAdminProducts = () => {
 
   useEffect(() => {
     fetchProducts()
-  }, [])
+
+    // Set up real-time sync for admin
+    let unsubscribe: (() => void) | undefined
+
+    if (isSupabaseConfigured()) {
+      unsubscribe = syncService.subscribeToProductChanges((payload) => {
+        console.log('Admin: Product change detected:', payload)
+        fetchProducts() // Refresh admin products on any change
+      })
+    }
+
+    // Listen for manual refresh events
+    const handleRefresh = () => fetchProducts()
+    window.addEventListener('refreshProducts', handleRefresh)
+
+    return () => {
+      unsubscribe?.()
+      window.removeEventListener('refreshProducts', handleRefresh)
+    }
+  }, [fetchProducts])
 
   return { 
     products, 
@@ -184,4 +231,28 @@ export const useAdminProducts = () => {
     updateProduct,
     deleteProduct
   }
+}
+
+// Hook for Supabase connection status
+export const useSupabaseStatus = () => {
+  const [isConfigured, setIsConfigured] = useState(isSupabaseConfigured())
+
+  useEffect(() => {
+    const checkStatus = () => {
+      setIsConfigured(isSupabaseConfigured())
+    }
+
+    // Check status periodically
+    const interval = setInterval(checkStatus, 5000)
+
+    // Listen for configuration changes
+    window.addEventListener('supabaseConfigured', checkStatus)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('supabaseConfigured', checkStatus)
+    }
+  }, [])
+
+  return { isConfigured }
 }

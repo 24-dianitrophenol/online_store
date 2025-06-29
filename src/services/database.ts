@@ -20,73 +20,90 @@ const isSupabaseConfigured = () => {
 
 // Fallback data for when Supabase is not configured
 const fallbackCategories = [
-  { id: '1', name: 'Fruits', description: 'Fresh fruits', icon: '🍎', display_order: 1, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: '2', name: 'Vegetables', description: 'Fresh vegetables', icon: '🥕', display_order: 2, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: '3', name: 'Dairy', description: 'Dairy products', icon: '🥛', display_order: 3, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: '4', name: 'Bakery', description: 'Baked goods', icon: '🍞', display_order: 4, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+  { id: 'rice', name: 'Rice', description: 'Premium quality rice varieties', icon: '🍚', display_order: 1, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'flour', name: 'Flour', description: 'Various types of flour for baking and cooking', icon: '🌾', display_order: 2, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'grains', name: 'Grains', description: 'Nutritious grains and cereals', icon: '🌾', display_order: 3, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'soya', name: 'Soya Products', description: 'Soya beans and soya-based products', icon: '🫘', display_order: 4, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'spices', name: 'Spices', description: 'Fresh and aromatic spices', icon: '🌶️', display_order: 5, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
 ]
 
 const fallbackProducts = [
   {
     id: '1',
-    name: 'Fresh Apples',
-    description: 'Crisp and sweet red apples',
-    price: 2.99,
+    name: 'Premium Basmati Rice',
+    description: 'Long grain aromatic basmati rice, perfect for special occasions',
+    price: 12000,
     image: '/images/1.jpg',
-    category_id: '1',
-    tags: ['fresh', 'organic'],
+    category_id: 'rice',
+    tags: ['premium', 'aromatic', 'long-grain'],
     available: true,
     featured: true,
-    rating: 4.5,
-    unit: 'lb',
+    rating: 4.8,
+    unit: 'kg',
     bulk_pricing: [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
   {
     id: '2',
-    name: 'Organic Bananas',
-    description: 'Yellow ripe bananas',
-    price: 1.99,
+    name: 'Local Rice',
+    description: 'High quality local rice, perfect for daily meals',
+    price: 8000,
     image: '/images/2.jpg',
-    category_id: '1',
-    tags: ['organic', 'potassium'],
+    category_id: 'rice',
+    tags: ['local', 'daily-use'],
     available: true,
     featured: false,
     rating: 4.2,
-    unit: 'bunch',
+    unit: 'kg',
     bulk_pricing: [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
   {
     id: '3',
-    name: 'Fresh Carrots',
-    description: 'Crunchy orange carrots',
-    price: 1.49,
+    name: 'Wheat Flour',
+    description: 'Fine wheat flour for baking and cooking',
+    price: 6000,
     image: '/images/3.jpg',
-    category_id: '2',
-    tags: ['fresh', 'vitamin-a'],
+    category_id: 'flour',
+    tags: ['wheat', 'baking'],
     available: true,
     featured: false,
     rating: 4.0,
-    unit: 'lb',
+    unit: 'kg',
     bulk_pricing: [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
   {
     id: '4',
-    name: 'Whole Milk',
-    description: 'Fresh whole milk',
-    price: 3.49,
+    name: 'Maize Flour',
+    description: 'Fresh maize flour for traditional dishes',
+    price: 5000,
     image: '/images/4.jpg',
-    category_id: '3',
-    tags: ['dairy', 'calcium'],
+    category_id: 'flour',
+    tags: ['maize', 'traditional'],
+    available: true,
+    featured: false,
+    rating: 4.1,
+    unit: 'kg',
+    bulk_pricing: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: '5',
+    name: 'Soya Beans',
+    description: 'Protein-rich soya beans',
+    price: 7000,
+    image: '/images/5.jpg',
+    category_id: 'soya',
+    tags: ['protein', 'healthy'],
     available: true,
     featured: true,
     rating: 4.3,
-    unit: 'gallon',
+    unit: 'kg',
     bulk_pricing: [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
@@ -212,7 +229,7 @@ const getAuthenticatedClient = async () => {
   return supabase
 }
 
-// Product services
+// Product services with real-time sync
 export const productService = {
   async getAll() {
     if (!isSupabaseConfigured()) {
@@ -377,11 +394,11 @@ export const productService = {
       
       console.log('Creating product:', product)
       
-      const { data, error } = await client
-        .from('products')
-        .insert(product)
-        .select()
-        .single()
+      // Use the enhanced function for creating products with images
+      const { data, error } = await client.rpc('create_product_with_images', {
+        p_product_data: product,
+        p_images: images
+      })
 
       if (error) {
         console.error('Product creation error:', error)
@@ -389,38 +406,6 @@ export const productService = {
       }
 
       console.log('Product created successfully:', data)
-
-      // Add images if provided
-      if (images.length > 0) {
-        const imageInserts = images.map((url, index) => ({
-          product_id: data.id,
-          image_url: url,
-          display_order: index,
-          is_primary: index === 0
-        }))
-
-        const { error: imageError } = await client
-          .from('product_images')
-          .insert(imageInserts)
-
-        if (imageError) {
-          console.warn('Failed to add product images:', imageError)
-        }
-      }
-
-      // Create inventory record
-      const { error: inventoryError } = await client
-        .from('inventory')
-        .insert({
-          product_id: data.id,
-          quantity: 0,
-          reorder_level: 10
-        })
-
-      if (inventoryError) {
-        console.warn('Failed to create inventory record:', inventoryError)
-      }
-
       return data
     } catch (error) {
       console.error('Error creating product:', error)
@@ -438,12 +423,19 @@ export const productService = {
       
       const { data, error } = await client
         .from('products')
-        .update(updates)
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', id)
         .select()
         .single()
 
       if (error) throw error
+      
+      // Trigger a refresh event for real-time sync
+      window.dispatchEvent(new CustomEvent('productUpdated', { detail: { id, data } }))
+      
       return data
     } catch (error) {
       console.error('Error updating product:', error)
@@ -465,6 +457,10 @@ export const productService = {
         .eq('id', id)
 
       if (error) throw error
+      
+      // Trigger a refresh event for real-time sync
+      window.dispatchEvent(new CustomEvent('productDeleted', { detail: { id } }))
+      
       return true
     } catch (error) {
       console.error('Error deleting product:', error)
@@ -802,68 +798,37 @@ export const analyticsService = {
   }
 }
 
-// Enhanced image upload helper with better error handling
-export const uploadImage = async (file: File, bucket: string = 'product-images'): Promise<string> => {
-  if (!isSupabaseConfigured()) {
-    throw new Error('Supabase is not configured. Please connect to Supabase first.')
-  }
-
-  try {
-    // Ensure admin is authenticated
-    const admin = await adminAuthService.getCurrentAdmin()
-    if (!admin) {
-      throw new Error('Admin authentication required for image upload')
+// Real-time sync utilities
+export const syncService = {
+  // Subscribe to product changes for real-time updates
+  subscribeToProductChanges(callback: (payload: any) => void) {
+    if (!isSupabaseConfigured()) {
+      console.warn('Real-time sync not available without Supabase configuration')
+      return () => {}
     }
 
-    console.log('Uploading image:', file.name)
+    const subscription = supabase
+      .channel('products_changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'products' }, 
+        callback
+      )
+      .subscribe()
 
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
-    const filePath = `${fileName}`
-
-    const client = await getAuthenticatedClient()
-    
-    const { error: uploadError } = await client.storage
-      .from(bucket)
-      .upload(filePath, file)
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError)
-      throw new Error(`Failed to upload image: ${uploadError.message}`)
+    return () => {
+      subscription.unsubscribe()
     }
+  },
 
-    const { data } = client.storage
-      .from(bucket)
-      .getPublicUrl(filePath)
-
-    console.log('Image uploaded successfully:', data.publicUrl)
-    return data.publicUrl
-  } catch (error) {
-    console.error('Error uploading image:', error)
-    throw error
+  // Trigger manual refresh across all components
+  triggerProductRefresh() {
+    window.dispatchEvent(new CustomEvent('refreshProducts'))
   }
 }
 
-// Delete image helper
-export const deleteImage = async (url: string, bucket: string = 'product-images'): Promise<void> => {
-  if (!isSupabaseConfigured()) {
-    throw new Error('Supabase is not configured. Please connect to Supabase first.')
-  }
-
-  try {
-    const fileName = url.split('/').pop()
-    if (!fileName) return
-
-    const client = await getAuthenticatedClient()
-    const { error } = await client.storage
-      .from(bucket)
-      .remove([fileName])
-
-    if (error) {
-      throw error
-    }
-  } catch (error) {
-    console.error('Error deleting image:', error)
-    throw error
-  }
-}
+// Export configuration status
+export const getSupabaseStatus = () => ({
+  configured: isSupabaseConfigured(),
+  url: import.meta.env.VITE_SUPABASE_URL,
+  hasKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY
+})

@@ -1,10 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Banner from '../components/adverts/Banner';
 import ProductGrid from '../components/products/ProductGrid';
 import CategorySelector from '../components/products/CategorySelector';
-import { Search, ShoppingBag, Tag, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ShoppingBag, Tag, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { PROMOTIONS, ADVERTS } from '../mocks/data';
-import { useProducts, useCategories } from '../hooks/useDatabase';
+import { useProducts, useCategories, useSupabaseStatus } from '../hooks/useDatabase';
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,10 +14,19 @@ const HomePage: React.FC = () => {
   const { addItem } = useCart();
   const navigate = useNavigate();
   const sliderRef = useRef<HTMLDivElement>(null);
+  const { isConfigured } = useSupabaseStatus();
 
   // Fetch data from database (products and categories only)
-  const { products, loading: productsLoading } = useProducts();
-  const { categories, loading: categoriesLoading } = useCategories();
+  const { products, loading: productsLoading, error: productsError } = useProducts();
+  const { categories, loading: categoriesLoading, error: categoriesError } = useCategories();
+
+  // Auto-refresh products when Supabase becomes available
+  useEffect(() => {
+    if (isConfigured) {
+      // Trigger a refresh when Supabase becomes configured
+      window.dispatchEvent(new CustomEvent('refreshProducts'));
+    }
+  }, [isConfigured]);
 
   const filteredProducts = products.filter(product => {
     const matchesCategory = selectedCategory ? product.category === selectedCategory : true;
@@ -53,130 +62,183 @@ const HomePage: React.FC = () => {
   if (productsLoading || categoriesLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading products...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col md:flex-row gap-6">
-      {/* Left Column - Banner and Special Offers */}
-      <div className="w-full md:w-1/3">
-        {/* Banner */}
-        <div className="mb-8">
-          <Banner adverts={bannerAdverts} />
-        </div>
-
-        {/* Special Offers */}
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <Tag className="text-primary" size={24} />
-              <h2 className="text-xl font-bold">Special Offers</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => scrollSlider('left')}
-                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                aria-label="Scroll left"
-              >
-                <ChevronLeft size={20} className="text-gray-600 dark:text-gray-300" />
-              </button>
-              <button 
-                onClick={() => scrollSlider('right')}
-                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                aria-label="Scroll right"
-              >
-                <ChevronRight size={20} className="text-gray-600 dark:text-gray-300" />
-              </button>
+    <div className="space-y-6">
+      {/* Supabase Status Indicator */}
+      {!isConfigured && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="text-blue-600 dark:text-blue-400 flex-shrink-0" size={20} />
+            <div>
+              <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                Demo Mode Active
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-300">
+                Connect to Supabase to enable full functionality and real-time updates
+              </p>
             </div>
           </div>
-          
-          <div 
-            ref={sliderRef}
-            className="relative overflow-x-auto scrollbar-hide snap-x snap-mandatory"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            <div className="flex gap-4 pb-4">
-              {PROMOTIONS.map(promo => (
-                <div 
-                  key={promo.id} 
-                  className="flex-none w-[280px] snap-start bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md hover:shadow-lg transition-shadow"
+        </div>
+      )}
+
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Left Column - Banner and Special Offers */}
+        <div className="w-full md:w-1/3">
+          {/* Banner */}
+          <div className="mb-8">
+            <Banner adverts={bannerAdverts} />
+          </div>
+
+          {/* Special Offers */}
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <Tag className="text-primary" size={24} />
+                <h2 className="text-xl font-bold">Special Offers</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => scrollSlider('left')}
+                  className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  aria-label="Scroll left"
                 >
-                  <div className="relative h-32 mb-4 rounded-lg overflow-hidden">
-                    <img 
-                      src={promo.image} 
-                      alt={promo.title}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute top-2 right-2">
-                      <span className="px-2 py-1 bg-red-500 text-white text-xs font-medium rounded-full">
-                        {promo.discount}% OFF
+                  <ChevronLeft size={20} className="text-gray-600 dark:text-gray-300" />
+                </button>
+                <button 
+                  onClick={() => scrollSlider('right')}
+                  className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  aria-label="Scroll right"
+                >
+                  <ChevronRight size={20} className="text-gray-600 dark:text-gray-300" />
+                </button>
+              </div>
+            </div>
+            
+            <div 
+              ref={sliderRef}
+              className="relative overflow-x-auto scrollbar-hide snap-x snap-mandatory"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              <div className="flex gap-4 pb-4">
+                {PROMOTIONS.map(promo => (
+                  <div 
+                    key={promo.id} 
+                    className="flex-none w-[280px] snap-start bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md hover:shadow-lg transition-shadow"
+                  >
+                    <div className="relative h-32 mb-4 rounded-lg overflow-hidden">
+                      <img 
+                        src={promo.image} 
+                        alt={promo.title}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-2 right-2">
+                        <span className="px-2 py-1 bg-red-500 text-white text-xs font-medium rounded-full">
+                          {promo.discount}% OFF
+                        </span>
+                      </div>
+                    </div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-1">
+                      {promo.title}
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                      {promo.description}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-primary font-bold text-sm">
+                        Min: UGX {(promo.minimumPurchase || 0).toLocaleString()}
                       </span>
+                      <button 
+                        onClick={() => {
+                          // Find product by applicable ID and add to cart
+                          const product = products.find(p => p.id === promo.applicableId);
+                          if (product) {
+                            handleOrder(product);
+                          } else {
+                            // If no specific product, navigate to promotions page
+                            navigate('/promotions');
+                          }
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors"
+                      >
+                        <ShoppingBag size={16} />
+                        Order
+                      </button>
                     </div>
                   </div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-1">
-                    {promo.title}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
-                    {promo.description}
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-primary font-bold text-sm">
-                      Min: UGX {(promo.minimumPurchase || 0).toLocaleString()}
-                    </span>
-                    <button 
-                      onClick={() => {
-                        // Find product by applicable ID and add to cart
-                        const product = products.find(p => p.id === promo.applicableId);
-                        if (product) {
-                          handleOrder(product);
-                        } else {
-                          // If no specific product, navigate to promotions page
-                          navigate('/promotions');
-                        }
-                      }}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-primary text-white rounded-lg text-sm hover:bg-primary/90 transition-colors"
-                    >
-                      <ShoppingBag size={16} />
-                      Order
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Right Column - Search, Categories, and Products */}
-      <div className="w-full md:w-2/3">
-        {/* Search Bar */}
-        <div className="relative mb-6">
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-4 py-2 pl-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+        {/* Right Column - Search, Categories, and Products */}
+        <div className="w-full md:w-2/3">
+          {/* Search Bar */}
+          <div className="relative mb-6">
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 pl-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          </div>
+
+          {/* Categories */}
+          <div className="mb-6">
+            <CategorySelector
+              categories={categories}
+              selectedCategory={selectedCategory}
+              onChange={setSelectedCategory}
+            />
+          </div>
+
+          {/* Error Display */}
+          {(productsError || categoriesError) && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
+                <div>
+                  <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                    Error loading data
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-300">
+                    {productsError || categoriesError}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Products Grid */}
+          <ProductGrid 
+            products={filteredProducts} 
+            onOrder={handleOrder}
+            emptyMessage={
+              searchQuery || selectedCategory 
+                ? "No products match your search criteria" 
+                : "No products available"
+            }
           />
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-        </div>
 
-        {/* Categories */}
-        <div className="mb-6">
-          <CategorySelector
-            categories={categories}
-            selectedCategory={selectedCategory}
-            onChange={setSelectedCategory}
-          />
+          {/* Real-time Update Indicator */}
+          {isConfigured && (
+            <div className="mt-6 text-center">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                🔄 Real-time updates enabled
+              </p>
+            </div>
+          )}
         </div>
-
-        {/* Products Grid */}
-        <ProductGrid 
-          products={filteredProducts} 
-          onOrder={handleOrder}
-        />
       </div>
     </div>
   );

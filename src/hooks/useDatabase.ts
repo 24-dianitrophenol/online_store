@@ -84,15 +84,30 @@ export const useProducts = () => {
 
     // Listen for manual refresh events
     const handleRefresh = () => fetchProducts(true)
+    const handleProductUpdated = () => {
+      console.log('Product updated event received, refreshing...')
+      fetchProducts(true)
+    }
+    const handleProductDeleted = () => {
+      console.log('Product deleted event received, refreshing...')
+      fetchProducts(true)
+    }
+    const handleProductCreated = () => {
+      console.log('Product created event received, refreshing...')
+      fetchProducts(true)
+    }
+
     window.addEventListener('refreshProducts', handleRefresh)
-    window.addEventListener('productUpdated', handleRefresh)
-    window.addEventListener('productDeleted', handleRefresh)
+    window.addEventListener('productUpdated', handleProductUpdated)
+    window.addEventListener('productDeleted', handleProductDeleted)
+    window.addEventListener('productCreated', handleProductCreated)
 
     return () => {
       unsubscribe?.()
       window.removeEventListener('refreshProducts', handleRefresh)
-      window.removeEventListener('productUpdated', handleRefresh)
-      window.removeEventListener('productDeleted', handleRefresh)
+      window.removeEventListener('productUpdated', handleProductUpdated)
+      window.removeEventListener('productDeleted', handleProductDeleted)
+      window.removeEventListener('productCreated', handleProductCreated)
     }
   }, [fetchProducts])
 
@@ -161,33 +176,42 @@ export const useAdminProducts = () => {
 
   const createProduct = async (productData: any, images: string[] = []) => {
     try {
+      console.log('Creating product:', productData, images)
       await productService.create(productData, images)
       await fetchProducts() // Refresh the list
       syncService.triggerProductRefresh() // Trigger refresh on main website
+      console.log('Product created and lists refreshed')
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create product'
+      console.error('Create product error:', err)
       throw new Error(errorMessage)
     }
   }
 
   const updateProduct = async (id: string, updates: any) => {
     try {
+      console.log('Updating product:', id, updates)
       await productService.update(id, updates)
       await fetchProducts() // Refresh the list
       syncService.triggerProductRefresh() // Trigger refresh on main website
+      console.log('Product updated and lists refreshed')
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update product'
+      console.error('Update product error:', err)
       throw new Error(errorMessage)
     }
   }
 
   const deleteProduct = async (id: string) => {
     try {
+      console.log('Deleting product:', id)
       await productService.delete(id)
       await fetchProducts() // Refresh the list
       syncService.triggerProductRefresh() // Trigger refresh on main website
+      console.log('Product deleted and lists refreshed')
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete product'
+      console.error('Delete product error:', err)
       throw new Error(errorMessage)
     }
   }
@@ -206,7 +230,11 @@ export const useAdminProducts = () => {
     }
 
     // Listen for manual refresh events
-    const handleRefresh = () => fetchProducts()
+    const handleRefresh = () => {
+      console.log('Admin: Manual refresh triggered')
+      fetchProducts()
+    }
+
     window.addEventListener('refreshProducts', handleRefresh)
 
     return () => {

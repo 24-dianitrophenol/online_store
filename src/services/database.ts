@@ -28,12 +28,27 @@ export const adminAuthService = {
     try {
       console.log('Attempting admin authentication...')
       
-      // Use the standard authentication function with correct parameter order
-      const { data, error } = await supabase
-        .rpc('authenticate_admin', { 
-          p_username: username, 
-          p_password: password 
-        })
+      // Try the enhanced function first, fallback to standard if not available
+      let data, error;
+      
+      try {
+        const result = await supabase
+          .rpc('authenticate_admin_enhanced', { 
+            p_username: username, 
+            p_password: password 
+          })
+        data = result.data;
+        error = result.error;
+      } catch (enhancedError) {
+        console.log('Enhanced function not available, trying standard function...')
+        const result = await supabase
+          .rpc('authenticate_admin', { 
+            p_username: username, 
+            p_password: password 
+          })
+        data = result.data;
+        error = result.error;
+      }
 
       if (error) {
         console.error('Authentication RPC error:', error)
@@ -52,6 +67,13 @@ export const adminAuthService = {
       localStorage.setItem('admin_user', JSON.stringify(admin))
       localStorage.setItem('admin_authenticated', 'true')
       localStorage.setItem('admin_session_id', admin.session_id || Date.now().toString())
+
+      // Set admin context in Supabase session
+      try {
+        await supabase.rpc('set_admin_context')
+      } catch (contextError) {
+        console.warn('Failed to set admin context:', contextError)
+      }
 
       return { user: null, admin }
     } catch (error) {
@@ -102,6 +124,12 @@ export const adminAuthService = {
         const maxSessionAge = 24 * 60 * 60 * 1000 // 24 hours
         
         if (sessionAge < maxSessionAge) {
+          // Set admin context for this session
+          try {
+            await supabase.rpc('set_admin_context')
+          } catch (error) {
+            console.warn('Failed to set admin context:', error)
+          }
           return admin
         } else {
           // Session expired, clear it

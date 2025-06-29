@@ -121,7 +121,7 @@ const DashboardOverview: React.FC = () => {
         {/* Database Status */}
         <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
           <CheckCircle className="text-green-600 dark:text-green-400" size={16} />
-          <span className="text-sm text-green-800 dark:text-green-200">Database Connected</span>
+          <span className="text-sm text-green-800 dark:text-green-200">Database Connected • Real-time Sync Active</span>
         </div>
       </div>
       
@@ -219,9 +219,9 @@ const DashboardOverview: React.FC = () => {
   );
 };
 
-// Products Management Component
+// Enhanced Products Management Component with Real-time Sync
 const ProductsManagement: React.FC = () => {
-  const { products, loading, error, createProduct, updateProduct, deleteProduct } = useAdminProducts();
+  const { products, loading, error, createProduct, updateProduct, deleteProduct, refetch } = useAdminProducts();
   const [categories, setCategories] = useState<any[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
@@ -243,6 +243,34 @@ const ProductsManagement: React.FC = () => {
 
   const [productImage, setProductImage] = useState<string>('');
   const [uploading, setUploading] = useState(false);
+
+  // Enhanced real-time sync effect
+  useEffect(() => {
+    console.log('🔧 Admin Products: Setting up real-time sync...');
+    
+    const handleProductChange = (event: CustomEvent) => {
+      console.log('🔧 Admin Products: Product change event received:', event.detail);
+      // Products will automatically refresh via useAdminProducts hook
+    };
+
+    const handleForceRefresh = () => {
+      console.log('🔧 Admin Products: Force refresh triggered');
+      refetch();
+    };
+
+    // Listen for product change events
+    window.addEventListener('productCreated', handleProductChange as EventListener);
+    window.addEventListener('productUpdated', handleProductChange as EventListener);
+    window.addEventListener('productDeleted', handleProductChange as EventListener);
+    window.addEventListener('forceProductRefresh', handleForceRefresh);
+
+    return () => {
+      window.removeEventListener('productCreated', handleProductChange as EventListener);
+      window.removeEventListener('productUpdated', handleProductChange as EventListener);
+      window.removeEventListener('productDeleted', handleProductChange as EventListener);
+      window.removeEventListener('forceProductRefresh', handleForceRefresh);
+    };
+  }, [refetch]);
 
   useEffect(() => {
     fetchCategories();
@@ -284,15 +312,19 @@ const ProductsManagement: React.FC = () => {
         featured: formData.featured
       };
 
+      console.log('🔧 Admin: Submitting product:', productData);
+
       if (editingProduct) {
         await updateProduct(editingProduct.id, productData);
+        console.log('✅ Admin: Product updated successfully');
       } else {
         await createProduct(productData, productImage ? [productImage] : []);
+        console.log('✅ Admin: Product created successfully');
       }
 
       resetForm();
     } catch (error) {
-      console.error('Error saving product:', error);
+      console.error('❌ Admin: Error saving product:', error);
       
       // Check for schema-related errors
       if (error instanceof Error) {
@@ -348,12 +380,19 @@ const ProductsManagement: React.FC = () => {
   const handleDelete = async (productId: string) => {
     if (confirm('Are you sure you want to delete this product?')) {
       try {
+        console.log('🔧 Admin: Deleting product:', productId);
         await deleteProduct(productId);
+        console.log('✅ Admin: Product deleted successfully');
       } catch (error) {
-        console.error('Error deleting product:', error);
+        console.error('❌ Admin: Error deleting product:', error);
         alert('Error deleting product. Please try again.');
       }
     }
+  };
+
+  const handleManualRefresh = () => {
+    console.log('🔄 Admin: Manual refresh triggered');
+    refetch();
   };
 
   const filteredProducts = products.filter(product => {
@@ -369,6 +408,7 @@ const ProductsManagement: React.FC = () => {
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
           <p className="text-gray-600 dark:text-gray-400">Loading products from database...</p>
+          <p className="text-xs text-gray-500 dark:text-gray-500">Real-time sync enabled</p>
         </div>
       </div>
     );
@@ -395,14 +435,29 @@ const ProductsManagement: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Products Management</h1>
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors w-full sm:w-auto justify-center"
-        >
-          <Plus size={20} />
-          Add Product
-        </button>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Products Management</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Real-time sync with main website • {products.length} products loaded
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={handleManualRefresh}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            title="Refresh products"
+          >
+            <RefreshCw size={20} />
+            Refresh
+          </button>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors w-full sm:w-auto justify-center"
+          >
+            <Plus size={20} />
+            Add Product
+          </button>
+        </div>
       </div>
 
       {/* Schema Error Alert */}
@@ -715,7 +770,7 @@ const ProductsManagement: React.FC = () => {
       {/* Database Status */}
       <div className="text-center">
         <p className="text-xs text-green-600 dark:text-green-400">
-          ✅ Database Connected • {products.length} products loaded
+          ✅ Database Connected • {products.length} products loaded • Real-time sync with main website active
         </p>
       </div>
     </div>

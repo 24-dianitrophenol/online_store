@@ -18,6 +18,59 @@ const isSupabaseConfigured = () => {
   return url && key && !url.includes('your-project-ref') && !key.includes('your-anon-key')
 }
 
+// Real-time event dispatcher for immediate UI updates
+class ProductEventDispatcher {
+  private static instance: ProductEventDispatcher;
+  
+  static getInstance(): ProductEventDispatcher {
+    if (!ProductEventDispatcher.instance) {
+      ProductEventDispatcher.instance = new ProductEventDispatcher();
+    }
+    return ProductEventDispatcher.instance;
+  }
+
+  // Dispatch product created event
+  productCreated(product: any) {
+    console.log('🚀 Product created event dispatched:', product.id);
+    window.dispatchEvent(new CustomEvent('productCreated', { detail: product }));
+    window.dispatchEvent(new CustomEvent('refreshProducts'));
+    // Force immediate refresh on both dashboard and website
+    this.triggerImmediateRefresh();
+  }
+
+  // Dispatch product updated event
+  productUpdated(productId: string, updates: any) {
+    console.log('📝 Product updated event dispatched:', productId);
+    window.dispatchEvent(new CustomEvent('productUpdated', { detail: { id: productId, updates } }));
+    window.dispatchEvent(new CustomEvent('refreshProducts'));
+    // Force immediate refresh on both dashboard and website
+    this.triggerImmediateRefresh();
+  }
+
+  // Dispatch product deleted event
+  productDeleted(productId: string) {
+    console.log('🗑️ Product deleted event dispatched:', productId);
+    window.dispatchEvent(new CustomEvent('productDeleted', { detail: { id: productId } }));
+    window.dispatchEvent(new CustomEvent('refreshProducts'));
+    // Force immediate refresh on both dashboard and website
+    this.triggerImmediateRefresh();
+  }
+
+  // Force immediate refresh across all components
+  private triggerImmediateRefresh() {
+    // Trigger multiple refresh events to ensure all components update
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('forceProductRefresh'));
+      window.dispatchEvent(new CustomEvent('refreshProducts'));
+    }, 100);
+    
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('forceProductRefresh'));
+      window.dispatchEvent(new CustomEvent('refreshProducts'));
+    }, 500);
+  }
+}
+
 // Admin Authentication with enhanced error handling
 export const adminAuthService = {
   async signIn(username: string, password: string) {
@@ -160,7 +213,7 @@ const getAuthenticatedClient = async () => {
   return supabase
 }
 
-// Product services with enhanced error handling and validation
+// Product services with enhanced error handling, validation, and real-time sync
 export const productService = {
   async getAll() {
     if (!isSupabaseConfigured()) {
@@ -198,6 +251,7 @@ export const productService = {
         throw new Error(`Failed to fetch products: ${error.message}`)
       }
       
+      console.log(`✅ Fetched ${data?.length || 0} products from database`)
       return data || []
     } catch (error) {
       console.error('Error fetching products:', error)
@@ -241,6 +295,7 @@ export const productService = {
         throw new Error(`Failed to fetch products: ${error.message}`)
       }
       
+      console.log(`✅ Fetched ${data?.length || 0} admin products from database`)
       return data || []
     } catch (error) {
       console.error('Error fetching admin products:', error)
@@ -305,7 +360,7 @@ export const productService = {
 
       const client = await getAuthenticatedClient()
       
-      console.log('Creating product with enhanced function:', product)
+      console.log('🚀 Creating product with enhanced function:', product)
       
       // Validate required fields
       if (!product.name || !product.description || !product.price || !product.category_id) {
@@ -334,10 +389,11 @@ export const productService = {
         throw new Error(`Failed to create product: ${error.message}`)
       }
 
-      console.log('Product created successfully:', data)
+      console.log('✅ Product created successfully:', data)
       
-      // Trigger a refresh event for real-time sync
-      window.dispatchEvent(new CustomEvent('productCreated', { detail: { data } }))
+      // Trigger immediate real-time sync
+      const dispatcher = ProductEventDispatcher.getInstance();
+      dispatcher.productCreated(data);
       
       return data
     } catch (error) {
@@ -354,7 +410,7 @@ export const productService = {
     try {
       const client = await getAuthenticatedClient()
       
-      console.log('Updating product with enhanced function:', id, updates)
+      console.log('📝 Updating product with enhanced function:', id, updates)
       
       // Use the enhanced product update function
       const { data, error } = await client.rpc('update_product_enhanced', {
@@ -377,10 +433,11 @@ export const productService = {
         throw new Error(`Failed to update product: ${error.message}`)
       }
 
-      console.log('Product updated successfully:', data)
+      console.log('✅ Product updated successfully:', data)
       
-      // Trigger a refresh event for real-time sync
-      window.dispatchEvent(new CustomEvent('productUpdated', { detail: { id, data } }))
+      // Trigger immediate real-time sync
+      const dispatcher = ProductEventDispatcher.getInstance();
+      dispatcher.productUpdated(id, updates);
       
       return data
     } catch (error) {
@@ -397,6 +454,8 @@ export const productService = {
     try {
       const client = await getAuthenticatedClient()
       
+      console.log('🗑️ Deleting product:', id)
+      
       const { error } = await client
         .from('products')
         .delete()
@@ -407,8 +466,11 @@ export const productService = {
         throw new Error(`Failed to delete product: ${error.message}`)
       }
       
-      // Trigger a refresh event for real-time sync
-      window.dispatchEvent(new CustomEvent('productDeleted', { detail: { id } }))
+      console.log('✅ Product deleted successfully:', id)
+      
+      // Trigger immediate real-time sync
+      const dispatcher = ProductEventDispatcher.getInstance();
+      dispatcher.productDeleted(id);
       
       return true
     } catch (error) {
@@ -777,7 +839,7 @@ export const analyticsService = {
   }
 }
 
-// Real-time sync utilities
+// Enhanced real-time sync utilities with immediate updates
 export const syncService = {
   // Subscribe to product changes for real-time updates
   subscribeToProductChanges(callback: (payload: any) => void) {
@@ -786,22 +848,53 @@ export const syncService = {
       return () => {}
     }
 
+    console.log('🔄 Setting up real-time product subscription...')
+
     const subscription = supabase
       .channel('products_changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'products' }, 
-        callback
+        (payload) => {
+          console.log('📡 Real-time product change received:', payload)
+          callback(payload)
+          
+          // Trigger immediate UI refresh
+          const dispatcher = ProductEventDispatcher.getInstance();
+          if (payload.eventType === 'INSERT') {
+            dispatcher.productCreated(payload.new);
+          } else if (payload.eventType === 'UPDATE') {
+            dispatcher.productUpdated(payload.new.id, payload.new);
+          } else if (payload.eventType === 'DELETE') {
+            dispatcher.productDeleted(payload.old.id);
+          }
+        }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('📡 Real-time subscription status:', status)
+      })
 
     return () => {
+      console.log('🔄 Unsubscribing from real-time product changes')
       subscription.unsubscribe()
     }
   },
 
   // Trigger manual refresh across all components
   triggerProductRefresh() {
+    console.log('🔄 Triggering manual product refresh across all components')
     window.dispatchEvent(new CustomEvent('refreshProducts'))
+    window.dispatchEvent(new CustomEvent('forceProductRefresh'))
+    
+    // Trigger multiple times to ensure all components catch the event
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('refreshProducts'))
+      window.dispatchEvent(new CustomEvent('forceProductRefresh'))
+    }, 100)
+    
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('refreshProducts'))
+      window.dispatchEvent(new CustomEvent('forceProductRefresh'))
+    }, 500)
   }
 }
 

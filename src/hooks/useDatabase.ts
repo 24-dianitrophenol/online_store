@@ -45,7 +45,7 @@ const convertCategory = (dbCategory: Category): any => ({
   icon: dbCategory.icon
 })
 
-// Enhanced products hook with real-time sync
+// Enhanced products hook with immediate real-time sync
 export const useProducts = () => {
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,11 +58,15 @@ export const useProducts = () => {
       }
       setError(null)
       
+      console.log('🔄 Fetching products from database...')
       const data = await productService.getAll()
-      setProducts(data.map(convertProduct))
+      const convertedProducts = data.map(convertProduct)
+      
+      console.log(`✅ Loaded ${convertedProducts.length} products`)
+      setProducts(convertedProducts)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch products'
-      console.error('Error fetching products:', err)
+      console.error('❌ Error fetching products:', err)
       setError(errorMessage)
     } finally {
       setLoading(false)
@@ -76,31 +80,45 @@ export const useProducts = () => {
     let unsubscribe: (() => void) | undefined
 
     if (isSupabaseConfigured()) {
+      console.log('🔄 Setting up real-time product subscription for main website...')
       unsubscribe = syncService.subscribeToProductChanges((payload) => {
-        console.log('Product change detected:', payload)
+        console.log('📡 Main website: Product change detected:', payload)
         fetchProducts(true) // Refresh products on any change
       })
     }
 
-    // Listen for manual refresh events
-    const handleRefresh = () => fetchProducts(true)
+    // Listen for manual refresh events with enhanced logging
+    const handleRefresh = () => {
+      console.log('🔄 Manual refresh triggered for main website')
+      fetchProducts(true)
+    }
+    
     const handleProductUpdated = () => {
-      console.log('Product updated event received, refreshing...')
+      console.log('📝 Product updated event received, refreshing main website...')
       fetchProducts(true)
     }
+    
     const handleProductDeleted = () => {
-      console.log('Product deleted event received, refreshing...')
+      console.log('🗑️ Product deleted event received, refreshing main website...')
       fetchProducts(true)
     }
+    
     const handleProductCreated = () => {
-      console.log('Product created event received, refreshing...')
+      console.log('🚀 Product created event received, refreshing main website...')
       fetchProducts(true)
     }
 
+    const handleForceRefresh = () => {
+      console.log('⚡ Force refresh triggered for main website')
+      fetchProducts(true)
+    }
+
+    // Add all event listeners
     window.addEventListener('refreshProducts', handleRefresh)
     window.addEventListener('productUpdated', handleProductUpdated)
     window.addEventListener('productDeleted', handleProductDeleted)
     window.addEventListener('productCreated', handleProductCreated)
+    window.addEventListener('forceProductRefresh', handleForceRefresh)
 
     return () => {
       unsubscribe?.()
@@ -108,6 +126,7 @@ export const useProducts = () => {
       window.removeEventListener('productUpdated', handleProductUpdated)
       window.removeEventListener('productDeleted', handleProductDeleted)
       window.removeEventListener('productCreated', handleProductCreated)
+      window.removeEventListener('forceProductRefresh', handleForceRefresh)
     }
   }, [fetchProducts])
 
@@ -153,7 +172,7 @@ export const useProductUpdates = () => {
   return { lastUpdate, triggerUpdate }
 }
 
-// Enhanced admin products hook with real-time sync
+// Enhanced admin products hook with immediate real-time sync
 export const useAdminProducts = () => {
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -163,12 +182,14 @@ export const useAdminProducts = () => {
     try {
       setLoading(true)
       setError(null)
+      console.log('🔄 Admin: Fetching products from database...')
       const data = await productService.getAllForAdmin()
+      console.log(`✅ Admin: Loaded ${data.length} products`)
       setProducts(data)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch admin products'
       setError(errorMessage)
-      console.error('Error fetching admin products:', err)
+      console.error('❌ Admin: Error fetching products:', err)
     } finally {
       setLoading(false)
     }
@@ -176,42 +197,42 @@ export const useAdminProducts = () => {
 
   const createProduct = async (productData: any, images: string[] = []) => {
     try {
-      console.log('Creating product:', productData, images)
+      console.log('🚀 Admin: Creating product:', productData, images)
       await productService.create(productData, images)
-      await fetchProducts() // Refresh the list
+      await fetchProducts() // Refresh the admin list
       syncService.triggerProductRefresh() // Trigger refresh on main website
-      console.log('Product created and lists refreshed')
+      console.log('✅ Admin: Product created and all lists refreshed')
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create product'
-      console.error('Create product error:', err)
+      console.error('❌ Admin: Create product error:', err)
       throw new Error(errorMessage)
     }
   }
 
   const updateProduct = async (id: string, updates: any) => {
     try {
-      console.log('Updating product:', id, updates)
+      console.log('📝 Admin: Updating product:', id, updates)
       await productService.update(id, updates)
-      await fetchProducts() // Refresh the list
+      await fetchProducts() // Refresh the admin list
       syncService.triggerProductRefresh() // Trigger refresh on main website
-      console.log('Product updated and lists refreshed')
+      console.log('✅ Admin: Product updated and all lists refreshed')
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update product'
-      console.error('Update product error:', err)
+      console.error('❌ Admin: Update product error:', err)
       throw new Error(errorMessage)
     }
   }
 
   const deleteProduct = async (id: string) => {
     try {
-      console.log('Deleting product:', id)
+      console.log('🗑️ Admin: Deleting product:', id)
       await productService.delete(id)
-      await fetchProducts() // Refresh the list
+      await fetchProducts() // Refresh the admin list
       syncService.triggerProductRefresh() // Trigger refresh on main website
-      console.log('Product deleted and lists refreshed')
+      console.log('✅ Admin: Product deleted and all lists refreshed')
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete product'
-      console.error('Delete product error:', err)
+      console.error('❌ Admin: Delete product error:', err)
       throw new Error(errorMessage)
     }
   }
@@ -219,27 +240,35 @@ export const useAdminProducts = () => {
   useEffect(() => {
     fetchProducts()
 
-    // Set up real-time sync for admin
+    // Set up real-time sync for admin with enhanced logging
     let unsubscribe: (() => void) | undefined
 
     if (isSupabaseConfigured()) {
+      console.log('🔄 Setting up real-time product subscription for admin dashboard...')
       unsubscribe = syncService.subscribeToProductChanges((payload) => {
-        console.log('Admin: Product change detected:', payload)
+        console.log('📡 Admin: Product change detected:', payload)
         fetchProducts() // Refresh admin products on any change
       })
     }
 
-    // Listen for manual refresh events
+    // Listen for manual refresh events with enhanced logging
     const handleRefresh = () => {
-      console.log('Admin: Manual refresh triggered')
+      console.log('🔄 Admin: Manual refresh triggered')
+      fetchProducts()
+    }
+
+    const handleForceRefresh = () => {
+      console.log('⚡ Admin: Force refresh triggered')
       fetchProducts()
     }
 
     window.addEventListener('refreshProducts', handleRefresh)
+    window.addEventListener('forceProductRefresh', handleForceRefresh)
 
     return () => {
       unsubscribe?.()
       window.removeEventListener('refreshProducts', handleRefresh)
+      window.removeEventListener('forceProductRefresh', handleForceRefresh)
     }
   }, [fetchProducts])
 

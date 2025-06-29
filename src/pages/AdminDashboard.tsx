@@ -14,7 +14,6 @@ import {
   Eye,
   Edit,
   Trash2,
-  Upload,
   Save,
   X,
   AlertCircle,
@@ -23,9 +22,13 @@ import {
   DollarSign,
   TrendingUp,
   Package2,
-  Menu
+  Menu,
+  Image as ImageIcon,
+  Upload
 } from 'lucide-react';
-import { adminAuthService, productService, categoryService, orderService, analyticsService, uploadImage } from '../services/database';
+import { adminAuthService, productService, categoryService, orderService, analyticsService } from '../services/database';
+import { isSupabaseConfigured } from '../lib/supabase';
+import ImageUpload from '../components/admin/ImageUpload';
 
 // Types
 interface AdminUser {
@@ -86,7 +89,16 @@ const DashboardOverview: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h1>
+        {!isSupabaseConfigured() && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              ⚠️ Supabase not configured - using demo data
+            </p>
+          </div>
+        )}
+      </div>
       
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
@@ -204,7 +216,7 @@ const ProductsManagement: React.FC = () => {
     featured: false
   });
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [productImage, setProductImage] = useState<string>('');
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -232,23 +244,25 @@ const ProductsManagement: React.FC = () => {
     }
   };
 
+  const handleImageUploaded = (url: string) => {
+    setProductImage(url);
+  };
+
+  const handleImageRemoved = () => {
+    setProductImage('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setUploading(true);
 
     try {
-      let imageUrl = '';
-      
-      // Upload image if provided
-      if (imageFile) {
-        imageUrl = await uploadImage(imageFile);
-      }
-
       const productData = {
         id: formData.id || `product-${Date.now()}`,
         name: formData.name,
         description: formData.description,
         price: parseFloat(formData.price),
+        image: productImage || '/images/placeholder.jpg',
         category_id: formData.category_id,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
         unit: formData.unit,
@@ -259,7 +273,7 @@ const ProductsManagement: React.FC = () => {
       if (editingProduct) {
         await productService.update(editingProduct.id, productData);
       } else {
-        await productService.create(productData, imageUrl ? [imageUrl] : []);
+        await productService.create(productData, productImage ? [productImage] : []);
       }
 
       await fetchProducts();
@@ -284,7 +298,7 @@ const ProductsManagement: React.FC = () => {
       available: true,
       featured: false
     });
-    setImageFile(null);
+    setProductImage('');
     setEditingProduct(null);
     setShowAddForm(false);
   };
@@ -301,6 +315,7 @@ const ProductsManagement: React.FC = () => {
       available: product.available,
       featured: product.featured
     });
+    setProductImage(product.image || '');
     setEditingProduct(product);
     setShowAddForm(true);
   };
@@ -338,12 +353,21 @@ const ProductsManagement: React.FC = () => {
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Products Management</h1>
         <button
           onClick={() => setShowAddForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors w-full sm:w-auto justify-center"
+          disabled={!isSupabaseConfigured()}
+          className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors w-full sm:w-auto justify-center disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus size={20} />
           Add Product
         </button>
       </div>
+
+      {!isSupabaseConfigured() && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+            ⚠️ Product management requires Supabase connection. Please connect to Supabase to add, edit, or delete products.
+          </p>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -372,7 +396,7 @@ const ProductsManagement: React.FC = () => {
       {/* Add/Edit Form Modal */}
       {showAddForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 md:p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
                 {editingProduct ? 'Edit Product' : 'Add New Product'}
@@ -385,132 +409,151 @@ const ProductsManagement: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Product ID</label>
-                  <input
-                    type="text"
-                    value={formData.id}
-                    onChange={(e) => setFormData({...formData, id: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                    placeholder="Auto-generated if empty"
-                  />
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column - Product Details */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Product ID</label>
+                      <input
+                        type="text"
+                        value={formData.id}
+                        onChange={(e) => setFormData({...formData, id: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                        placeholder="Auto-generated if empty"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Category *</label>
+                      <select
+                        value={formData.category_id}
+                        onChange={(e) => setFormData({...formData, category_id: e.target.value})}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                      >
+                        <option value="">Select Category</option>
+                        {categories.map(category => (
+                          <option key={category.id} value={category.id}>{category.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Product Name *</label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Description *</label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData({...formData, description: e.target.value})}
+                      required
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Price (UGX) *</label>
+                      <input
+                        type="number"
+                        value={formData.price}
+                        onChange={(e) => setFormData({...formData, price: e.target.value})}
+                        required
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Unit</label>
+                      <select
+                        value={formData.unit}
+                        onChange={(e) => setFormData({...formData, unit: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                      >
+                        <option value="kg">Kilogram (kg)</option>
+                        <option value="g">Gram (g)</option>
+                        <option value="lb">Pound (lb)</option>
+                        <option value="piece">Piece</option>
+                        <option value="pack">Pack</option>
+                        <option value="liter">Liter</option>
+                        <option value="ml">Milliliter</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Tags (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={formData.tags}
+                      onChange={(e) => setFormData({...formData, tags: e.target.value})}
+                      placeholder="premium, organic, local"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.available}
+                        onChange={(e) => setFormData({...formData, available: e.target.checked})}
+                        className="mr-2"
+                      />
+                      Available
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.featured}
+                        onChange={(e) => setFormData({...formData, featured: e.target.checked})}
+                        className="mr-2"
+                      />
+                      Featured
+                    </label>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Category</label>
-                  <select
-                    value={formData.category_id}
-                    onChange={(e) => setFormData({...formData, category_id: e.target.value})}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                  >
-                    <option value="">Select Category</option>
-                    {categories.map(category => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
+
+                {/* Right Column - Image Upload */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+                      <ImageIcon size={16} />
+                      Product Image
+                    </label>
+                    <ImageUpload
+                      onImageUploaded={handleImageUploaded}
+                      onImageRemoved={handleImageRemoved}
+                      currentImage={productImage}
+                      disabled={!isSupabaseConfigured()}
+                      className="h-full"
+                    />
+                    {!isSupabaseConfigured() && (
+                      <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                        Image upload requires Supabase connection
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-2">Product Name</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  required
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Price (UGX)</label>
-                  <input
-                    type="number"
-                    value={formData.price}
-                    onChange={(e) => setFormData({...formData, price: e.target.value})}
-                    required
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Unit</label>
-                  <select
-                    value={formData.unit}
-                    onChange={(e) => setFormData({...formData, unit: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                  >
-                    <option value="kg">Kilogram (kg)</option>
-                    <option value="g">Gram (g)</option>
-                    <option value="lb">Pound (lb)</option>
-                    <option value="piece">Piece</option>
-                    <option value="pack">Pack</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Tags (comma-separated)</label>
-                <input
-                  type="text"
-                  value={formData.tags}
-                  onChange={(e) => setFormData({...formData, tags: e.target.value})}
-                  placeholder="premium, organic, local"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Product Image</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                />
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-4">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.available}
-                    onChange={(e) => setFormData({...formData, available: e.target.checked})}
-                    className="mr-2"
-                  />
-                  Available
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.featured}
-                    onChange={(e) => setFormData({...formData, featured: e.target.checked})}
-                    className="mr-2"
-                  />
-                  Featured
-                </label>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+              <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button
                   type="submit"
-                  disabled={uploading}
-                  className="flex items-center gap-2 px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 justify-center"
+                  disabled={uploading || !isSupabaseConfigured()}
+                  className="flex items-center gap-2 px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed justify-center"
                 >
                   {uploading ? (
                     <>
@@ -556,7 +599,7 @@ const ProductsManagement: React.FC = () => {
                   <td className="py-3 px-2 md:px-4">
                     <div className="flex items-center gap-3">
                       <img
-                        src={product.product_images?.[0]?.image_url || '/images/placeholder.jpg'}
+                        src={product.product_images?.[0]?.image_url || product.image || '/images/placeholder.jpg'}
                         alt={product.name}
                         className="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg"
                       />
@@ -590,13 +633,15 @@ const ProductsManagement: React.FC = () => {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleEdit(product)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        disabled={!isSupabaseConfigured()}
+                        className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Edit size={16} />
                       </button>
                       <button
                         onClick={() => handleDelete(product.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        disabled={!isSupabaseConfigured()}
+                        className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -725,7 +770,8 @@ const OrdersManagement: React.FC = () => {
                     <select
                       value={order.status}
                       onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                      className={`px-2 py-1 rounded-full text-xs border-0 focus:ring-2 focus:ring-orange-500 ${
+                      disabled={!isSupabaseConfigured()}
+                      className={`px-2 py-1 rounded-full text-xs border-0 focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed ${
                         order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                         order.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
                         order.status === 'processing' ? 'bg-purple-100 text-purple-800' :

@@ -26,6 +26,9 @@ export const supabase = createClient(
   }
 )
 
+// Check if Supabase is properly configured
+export const isSupabaseConfigured = () => isConfigured
+
 // Database types
 export interface Database {
   public: {
@@ -355,29 +358,53 @@ export interface Database {
   }
 }
 
-// Image upload helper
+// Enhanced image upload helper with proper error handling and validation
 export const uploadImage = async (file: File, bucket: string = 'product-images'): Promise<string> => {
   if (!isConfigured) {
     throw new Error('Supabase is not configured. Please connect to Supabase first.')
   }
 
-  const fileExt = file.name.split('.').pop()
-  const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
-  const filePath = `${fileName}`
-
-  const { error: uploadError } = await supabase.storage
-    .from(bucket)
-    .upload(filePath, file)
-
-  if (uploadError) {
-    throw uploadError
+  // Validate file type
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error('Invalid file type. Please upload a valid image file (JPEG, PNG, WebP, or GIF).')
   }
 
-  const { data } = supabase.storage
-    .from(bucket)
-    .getPublicUrl(filePath)
+  // Validate file size (max 5MB)
+  const maxSize = 5 * 1024 * 1024 // 5MB
+  if (file.size > maxSize) {
+    throw new Error('File size too large. Please upload an image smaller than 5MB.')
+  }
 
-  return data.publicUrl
+  try {
+    console.log('Uploading image:', file.name, 'Size:', file.size, 'Type:', file.type)
+
+    const fileExt = file.name.split('.').pop()?.toLowerCase()
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+    const filePath = `products/${fileName}`
+
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      })
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError)
+      throw new Error(`Failed to upload image: ${uploadError.message}`)
+    }
+
+    const { data } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath)
+
+    console.log('Image uploaded successfully:', data.publicUrl)
+    return data.publicUrl
+  } catch (error) {
+    console.error('Error uploading image:', error)
+    throw error
+  }
 }
 
 // Delete image helper
@@ -386,14 +413,89 @@ export const deleteImage = async (url: string, bucket: string = 'product-images'
     throw new Error('Supabase is not configured. Please connect to Supabase first.')
   }
 
-  const fileName = url.split('/').pop()
-  if (!fileName) return
+  try {
+    // Extract file path from URL
+    const urlParts = url.split('/')
+    const bucketIndex = urlParts.findIndex(part => part === bucket)
+    if (bucketIndex === -1) return
 
-  const { error } = await supabase.storage
-    .from(bucket)
-    .remove([fileName])
+    const filePath = urlParts.slice(bucketIndex + 1).join('/')
+    if (!filePath) return
 
-  if (error) {
+    const { error } = await supabase.storage
+      .from(bucket)
+      .remove([filePath])
+
+    if (error) {
+      console.error('Delete error:', error)
+      throw error
+    }
+
+    console.log('Image deleted successfully:', filePath)
+  } catch (error) {
+    console.error('Error deleting image:', error)
     throw error
+  }
+}
+
+// Helper function to get optimized image URL
+export const getOptimizedImageUrl = (url: string, width?: number, height?: number, quality?: number): string => {
+  if (!url || !isConfigured) return url
+
+  try {
+    const urlObj = new URL(url)
+    const params = new URLSearchParams()
+    
+    if (width) params.set('width', width.toString())
+    if (height) params.set('height', height.toString())
+    if (quality) params.set('quality', quality.toString())
+    
+    if (params.toString()) {
+      urlObj.search = params.toString()
+    }
+    
+    return urlObj.toString()
+  } catch {
+    return url
+  }
+}
+
+// Storage bucket management
+export const ensureStorageBucket = async (bucketName: string = 'product-images') => {
+  if (!isConfigured) {
+    throw new Error('Supabase is not configured. Please connect to Supabase first.')
+  }
+
+  try {
+    // Check if bucket exists
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets()
+    
+    if (listError) {
+      console.error('Error listing buckets:', listError)
+      return false
+    }
+
+    const bucketExists = buckets?.some(bucket => bucket.name === bucketName)
+    
+    if (!bucketExists) {
+      // Create bucket if it doesn't exist
+      const { error: createError } = await supabase.storage.createBucket(bucketName, {
+        public: true,
+        allowedMimeTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'],
+        fileSizeLimit: 5242880 // 5MB
+      })
+
+      if (createError) {
+        console.error('Error creating bucket:', createError)
+        return false
+      }
+
+      console.log(`Storage bucket '${bucketName}' created successfully`)
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error ensuring storage bucket:', error)
+    return false
   }
 }

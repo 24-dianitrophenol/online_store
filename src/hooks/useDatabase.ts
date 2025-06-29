@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { productService, categoryService } from '../services/database'
+import { isSupabaseConfigured } from '../lib/supabase'
 import type { Database } from '../lib/supabase'
 
 type Product = Database['public']['Tables']['products']['Row'] & {
@@ -52,10 +53,18 @@ export const useProducts = () => {
   const fetchProducts = async () => {
     try {
       setLoading(true)
+      setError(null)
       const data = await productService.getAll()
       setProducts(data.map(convertProduct))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch products')
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch products'
+      setError(errorMessage)
+      console.error('Error fetching products:', err)
+      
+      // If Supabase is not configured, don't treat it as an error
+      if (!isSupabaseConfigured()) {
+        setError(null)
+      }
     } finally {
       setLoading(false)
     }
@@ -77,10 +86,18 @@ export const useCategories = () => {
     const fetchCategories = async () => {
       try {
         setLoading(true)
+        setError(null)
         const data = await categoryService.getAll()
         setCategories(data.map(convertCategory))
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch categories')
+        const errorMessage = err instanceof Error ? err.message : 'Failed to fetch categories'
+        setError(errorMessage)
+        console.error('Error fetching categories:', err)
+        
+        // If Supabase is not configured, don't treat it as an error
+        if (!isSupabaseConfigured()) {
+          setError(null)
+        }
       } finally {
         setLoading(false)
       }
@@ -90,4 +107,81 @@ export const useCategories = () => {
   }, [])
 
   return { categories, loading, error }
+}
+
+// Hook for real-time product updates
+export const useProductUpdates = () => {
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+
+  const triggerUpdate = () => {
+    setLastUpdate(new Date())
+  }
+
+  return { lastUpdate, triggerUpdate }
+}
+
+// Hook for admin product management
+export const useAdminProducts = () => {
+  const [products, setProducts] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const data = await productService.getAllForAdmin()
+      setProducts(data)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch admin products'
+      setError(errorMessage)
+      console.error('Error fetching admin products:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const createProduct = async (productData: any, images: string[] = []) => {
+    try {
+      await productService.create(productData, images)
+      await fetchProducts() // Refresh the list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create product'
+      throw new Error(errorMessage)
+    }
+  }
+
+  const updateProduct = async (id: string, updates: any) => {
+    try {
+      await productService.update(id, updates)
+      await fetchProducts() // Refresh the list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update product'
+      throw new Error(errorMessage)
+    }
+  }
+
+  const deleteProduct = async (id: string) => {
+    try {
+      await productService.delete(id)
+      await fetchProducts() // Refresh the list
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete product'
+      throw new Error(errorMessage)
+    }
+  }
+
+  useEffect(() => {
+    fetchProducts()
+  }, [])
+
+  return { 
+    products, 
+    loading, 
+    error, 
+    refetch: fetchProducts,
+    createProduct,
+    updateProduct,
+    deleteProduct
+  }
 }

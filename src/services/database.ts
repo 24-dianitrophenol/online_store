@@ -18,99 +18,7 @@ const isSupabaseConfigured = () => {
   return url && key && !url.includes('your-project-ref') && !key.includes('your-anon-key')
 }
 
-// Fallback data for when Supabase is not configured
-const fallbackCategories = [
-  { id: 'rice', name: 'Rice', description: 'Premium quality rice varieties', icon: '🍚', display_order: 1, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: 'flour', name: 'Flour', description: 'Various types of flour for baking and cooking', icon: '🌾', display_order: 2, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: 'grains', name: 'Grains', description: 'Nutritious grains and cereals', icon: '🌾', display_order: 3, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: 'soya', name: 'Soya Products', description: 'Soya beans and soya-based products', icon: '🫘', display_order: 4, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: 'spices', name: 'Spices', description: 'Fresh and aromatic spices', icon: '🌶️', display_order: 5, is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-]
-
-const fallbackProducts = [
-  {
-    id: '1',
-    name: 'Premium Basmati Rice',
-    description: 'Long grain aromatic basmati rice, perfect for special occasions',
-    price: 12000,
-    image: '/images/1.jpg',
-    category_id: 'rice',
-    tags: ['premium', 'aromatic', 'long-grain'],
-    available: true,
-    featured: true,
-    rating: 4.8,
-    unit: 'kg',
-    bulk_pricing: [],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: '2',
-    name: 'Local Rice',
-    description: 'High quality local rice, perfect for daily meals',
-    price: 8000,
-    image: '/images/2.jpg',
-    category_id: 'rice',
-    tags: ['local', 'daily-use'],
-    available: true,
-    featured: false,
-    rating: 4.2,
-    unit: 'kg',
-    bulk_pricing: [],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: '3',
-    name: 'Wheat Flour',
-    description: 'Fine wheat flour for baking and cooking',
-    price: 6000,
-    image: '/images/3.jpg',
-    category_id: 'flour',
-    tags: ['wheat', 'baking'],
-    available: true,
-    featured: false,
-    rating: 4.0,
-    unit: 'kg',
-    bulk_pricing: [],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: '4',
-    name: 'Maize Flour',
-    description: 'Fresh maize flour for traditional dishes',
-    price: 5000,
-    image: '/images/4.jpg',
-    category_id: 'flour',
-    tags: ['maize', 'traditional'],
-    available: true,
-    featured: false,
-    rating: 4.1,
-    unit: 'kg',
-    bulk_pricing: [],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: '5',
-    name: 'Soya Beans',
-    description: 'Protein-rich soya beans',
-    price: 7000,
-    image: '/images/5.jpg',
-    category_id: 'soya',
-    tags: ['protein', 'healthy'],
-    available: true,
-    featured: true,
-    rating: 4.3,
-    unit: 'kg',
-    bulk_pricing: [],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
-]
-
-// Admin Authentication - Use existing functions
+// Admin Authentication
 export const adminAuthService = {
   async signIn(username: string, password: string) {
     if (!isSupabaseConfigured()) {
@@ -166,13 +74,6 @@ export const adminAuthService = {
   },
 
   async signOut() {
-    if (!isSupabaseConfigured()) {
-      // Clear localStorage even if Supabase is not configured
-      localStorage.removeItem('admin_user')
-      localStorage.removeItem('admin_authenticated')
-      return
-    }
-
     try {
       // Clear admin context
       await supabase.rpc('clear_admin_context')
@@ -211,10 +112,6 @@ export const adminAuthService = {
 
 // Enhanced Supabase client with admin context
 const getAuthenticatedClient = async () => {
-  if (!isSupabaseConfigured()) {
-    return supabase
-  }
-
   const isAdminAuthenticated = localStorage.getItem('admin_authenticated') === 'true'
   
   if (isAdminAuthenticated) {
@@ -233,13 +130,7 @@ const getAuthenticatedClient = async () => {
 export const productService = {
   async getAll() {
     if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured, using fallback data')
-      return fallbackProducts.map(product => ({
-        ...product,
-        categories: fallbackCategories.find(cat => cat.id === product.category_id),
-        product_images: [],
-        inventory: [{ quantity: 100, reserved_quantity: 0, reorder_level: 10 }]
-      }))
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
@@ -272,25 +163,13 @@ export const productService = {
       return data || []
     } catch (error) {
       console.error('Error fetching products:', error)
-      console.warn('Falling back to demo data')
-      return fallbackProducts.map(product => ({
-        ...product,
-        categories: fallbackCategories.find(cat => cat.id === product.category_id),
-        product_images: [],
-        inventory: [{ quantity: 100, reserved_quantity: 0, reorder_level: 10 }]
-      }))
+      throw error
     }
   },
 
   async getAllForAdmin() {
     if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured, using fallback data')
-      return fallbackProducts.map(product => ({
-        ...product,
-        categories: fallbackCategories.find(cat => cat.id === product.category_id),
-        product_images: [],
-        inventory: [{ quantity: 100, reserved_quantity: 0, reorder_level: 10 }]
-      }))
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
@@ -323,25 +202,13 @@ export const productService = {
       return data || []
     } catch (error) {
       console.error('Error fetching admin products:', error)
-      return fallbackProducts.map(product => ({
-        ...product,
-        categories: fallbackCategories.find(cat => cat.id === product.category_id),
-        product_images: [],
-        inventory: [{ quantity: 100, reserved_quantity: 0, reorder_level: 10 }]
-      }))
+      throw error
     }
   },
 
   async getById(id: string) {
     if (!isSupabaseConfigured()) {
-      const product = fallbackProducts.find(p => p.id === id)
-      if (!product) throw new Error('Product not found')
-      return {
-        ...product,
-        categories: fallbackCategories.find(cat => cat.id === product.category_id),
-        product_images: [],
-        inventory: [{ quantity: 100, reserved_quantity: 0, reorder_level: 10 }]
-      }
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
@@ -473,8 +340,7 @@ export const productService = {
 export const categoryService = {
   async getAll() {
     if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured, using fallback data')
-      return fallbackCategories
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
@@ -488,15 +354,13 @@ export const categoryService = {
       return data || []
     } catch (error) {
       console.error('Error fetching categories:', error)
-      console.warn('Falling back to demo data')
-      return fallbackCategories
+      throw error
     }
   },
 
   async getAllForAdmin() {
     if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured, using fallback data')
-      return fallbackCategories
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
@@ -510,7 +374,7 @@ export const categoryService = {
       return data || []
     } catch (error) {
       console.error('Error fetching admin categories:', error)
-      return fallbackCategories
+      throw error
     }
   }
 }
@@ -557,7 +421,7 @@ export const productImageService = {
 export const inventoryService = {
   async getByProductId(productId: string) {
     if (!isSupabaseConfigured()) {
-      return { quantity: 100, reserved_quantity: 0, reorder_level: 10 }
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
@@ -600,7 +464,7 @@ export const inventoryService = {
 
   async getLowStock(threshold?: number) {
     if (!isSupabaseConfigured()) {
-      return []
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
@@ -636,7 +500,7 @@ export const inventoryService = {
 export const orderService = {
   async getAll() {
     if (!isSupabaseConfigured()) {
-      return []
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
@@ -666,7 +530,7 @@ export const orderService = {
 
   async getRecent(limit = 10) {
     if (!isSupabaseConfigured()) {
-      return []
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
@@ -715,14 +579,7 @@ export const orderService = {
 export const analyticsService = {
   async getDashboardStats() {
     if (!isSupabaseConfigured()) {
-      return {
-        today: { total_revenue: 0, total_orders: 0, total_customers: 0 },
-        monthly: [],
-        totalProducts: fallbackProducts.length,
-        activeProducts: fallbackProducts.filter(p => p.available).length,
-        lowStockItems: [],
-        recentOrders: []
-      }
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
@@ -770,7 +627,7 @@ export const analyticsService = {
 
   async getBusinessAnalytics(startDate?: string, endDate?: string) {
     if (!isSupabaseConfigured()) {
-      return []
+      throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {

@@ -16,17 +16,9 @@ const HomePage: React.FC = () => {
   const sliderRef = useRef<HTMLDivElement>(null);
   const { isConfigured } = useSupabaseStatus();
 
-  // Fetch data from database (products and categories only)
+  // Fetch data from database
   const { products, loading: productsLoading, error: productsError } = useProducts();
   const { categories, loading: categoriesLoading, error: categoriesError } = useCategories();
-
-  // Auto-refresh products when Supabase becomes available
-  useEffect(() => {
-    if (isConfigured) {
-      // Trigger a refresh when Supabase becomes configured
-      window.dispatchEvent(new CustomEvent('refreshProducts'));
-    }
-  }, [isConfigured]);
 
   const filteredProducts = products.filter(product => {
     const matchesCategory = selectedCategory ? product.category === selectedCategory : true;
@@ -64,7 +56,22 @@ const HomePage: React.FC = () => {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading products...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading products from database...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show connection error if Supabase is not configured
+  if (!isConfigured) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4 max-w-md">
+          <AlertCircle className="mx-auto text-red-500" size={48} />
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Database Connection Required</h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            Please connect to Supabase to view products. Click the "Connect to Supabase" button in the top right corner.
+          </p>
         </div>
       </div>
     );
@@ -72,23 +79,6 @@ const HomePage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Supabase Status Indicator */}
-      {!isConfigured && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="text-blue-600 dark:text-blue-400 flex-shrink-0" size={20} />
-            <div>
-              <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                Demo Mode Active
-              </p>
-              <p className="text-xs text-blue-600 dark:text-blue-300">
-                Connect to Supabase to enable full functionality and real-time updates
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="flex flex-col md:flex-row gap-6">
         {/* Left Column - Banner and Special Offers */}
         <div className="w-full md:w-1/3">
@@ -209,7 +199,7 @@ const HomePage: React.FC = () => {
                 <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
                 <div>
                   <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                    Error loading data
+                    Error loading data from database
                   </p>
                   <p className="text-xs text-red-600 dark:text-red-300">
                     {productsError || categoriesError}
@@ -226,15 +216,15 @@ const HomePage: React.FC = () => {
             emptyMessage={
               searchQuery || selectedCategory 
                 ? "No products match your search criteria" 
-                : "No products available"
+                : "No products available in database"
             }
           />
 
-          {/* Real-time Update Indicator */}
-          {isConfigured && (
+          {/* Database Status Indicator */}
+          {isConfigured && products.length > 0 && (
             <div className="mt-6 text-center">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                🔄 Real-time updates enabled
+              <p className="text-xs text-green-600 dark:text-green-400">
+                ✅ Connected to database • {products.length} products loaded
               </p>
             </div>
           )}

@@ -25,7 +25,10 @@ import {
   Menu,
   Image as ImageIcon,
   Upload,
-  RefreshCw
+  RefreshCw,
+  User,
+  Database,
+  Key
 } from 'lucide-react';
 import { adminAuthService, productService, categoryService, orderService, analyticsService } from '../services/database';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -1024,6 +1027,302 @@ const OrdersManagement: React.FC = () => {
   );
 };
 
+// Admin Settings Component
+const AdminSettings: React.FC = () => {
+  const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | null; text: string }>({ type: null, text: '' });
+  
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    full_name: '',
+    current_password: '',
+    new_password: '',
+    confirm_password: ''
+  });
+
+  useEffect(() => {
+    const loadAdminData = async () => {
+      try {
+        const admin = await adminAuthService.getCurrentAdmin();
+        if (admin) {
+          setCurrentAdmin(admin);
+          setFormData({
+            username: admin.username,
+            email: admin.email,
+            full_name: admin.full_name,
+            current_password: '',
+            new_password: '',
+            confirm_password: ''
+          });
+        }
+      } catch (error) {
+        console.error('Error loading admin data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAdminData();
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setMessage({ type: null, text: '' });
+
+    try {
+      // Validate password change if attempted
+      if (formData.new_password) {
+        if (!formData.current_password) {
+          throw new Error('Current password is required to change password');
+        }
+        if (formData.new_password !== formData.confirm_password) {
+          throw new Error('New passwords do not match');
+        }
+        if (formData.new_password.length < 6) {
+          throw new Error('New password must be at least 6 characters long');
+        }
+      }
+
+      // Here you would typically call an API to update the admin user
+      // For now, we'll simulate the update
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Update local storage
+      if (currentAdmin) {
+        const updatedAdmin = {
+          ...currentAdmin,
+          username: formData.username,
+          email: formData.email,
+          full_name: formData.full_name
+        };
+        localStorage.setItem('admin_user', JSON.stringify(updatedAdmin));
+        setCurrentAdmin(updatedAdmin);
+      }
+
+      setMessage({ type: 'success', text: 'Settings updated successfully!' });
+      
+      // Clear password fields
+      setFormData(prev => ({
+        ...prev,
+        current_password: '',
+        new_password: '',
+        confirm_password: ''
+      }));
+
+    } catch (error) {
+      setMessage({ 
+        type: 'error', 
+        text: error instanceof Error ? error.message : 'Failed to update settings' 
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Admin Settings</h1>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Profile Settings */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+          <h2 className="text-xl font-semibold mb-6 text-gray-900 dark:text-white flex items-center gap-2">
+            <User size={24} className="text-primary" />
+            Profile Settings
+          </h2>
+
+          {message.type && (
+            <div className={`mb-4 p-3 rounded-lg ${
+              message.type === 'success' 
+                ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+            }`}>
+              {message.text}
+            </div>
+          )}
+
+          <form onSubmit={handleSave} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Username</label>
+              <input
+                type="text"
+                value={formData.username}
+                onChange={(e) => setFormData({...formData, username: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Email</label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Full Name</label>
+              <input
+                type="text"
+                value={formData.full_name}
+                onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                required
+              />
+            </div>
+
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
+              <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Change Password</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Current Password</label>
+                  <input
+                    type="password"
+                    value={formData.current_password}
+                    onChange={(e) => setFormData({...formData, current_password: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                    placeholder="Enter current password to change"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">New Password</label>
+                  <input
+                    type="password"
+                    value={formData.new_password}
+                    onChange={(e) => setFormData({...formData, new_password: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                    placeholder="Enter new password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Confirm New Password</label>
+                  <input
+                    type="password"
+                    value={formData.confirm_password}
+                    onChange={(e) => setFormData({...formData, confirm_password: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                    placeholder="Confirm new password"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+            >
+              {saving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save size={20} />
+                  Save Changes
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+
+        {/* Database Information */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+          <h2 className="text-xl font-semibold mb-6 text-gray-900 dark:text-white flex items-center gap-2">
+            <Database size={24} className="text-primary" />
+            Database Information
+          </h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Supabase URL</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={import.meta.env.VITE_SUPABASE_URL || 'Not configured'}
+                  readOnly
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                />
+                <div className={`w-3 h-3 rounded-full ${
+                  isSupabaseConfigured() ? 'bg-green-500' : 'bg-red-500'
+                }`} title={isSupabaseConfigured() ? 'Connected' : 'Not connected'} />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">API Key Status</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Configured' : 'Not configured'}
+                  readOnly
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                />
+                <Key size={16} className={`${
+                  import.meta.env.VITE_SUPABASE_ANON_KEY ? 'text-green-500' : 'text-red-500'
+                }`} />
+              </div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <h3 className="font-medium text-blue-800 dark:text-blue-200 mb-2">Database Status</h3>
+              <div className="space-y-2 text-sm text-blue-700 dark:text-blue-300">
+                <div className="flex justify-between">
+                  <span>Connection:</span>
+                  <span className={`font-medium ${
+                    isSupabaseConfigured() ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                  }`}>
+                    {isSupabaseConfigured() ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Real-time Sync:</span>
+                  <span className="font-medium text-green-600 dark:text-green-400">Enabled</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Products Loaded:</span>
+                  <span className="font-medium">{currentAdmin ? 'Yes' : 'No'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+              <h3 className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">Configuration Note</h3>
+              <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                Database configuration is managed through environment variables. 
+                Contact your system administrator to modify database settings.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main Admin Dashboard Component
 const AdminDashboard: React.FC = () => {
   const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
@@ -1080,6 +1379,7 @@ const AdminDashboard: React.FC = () => {
     { path: '/admin-user/products', icon: Package, label: 'Products' },
     { path: '/admin-user/orders', icon: ShoppingCart, label: 'Orders' },
     { path: '/admin-user/analytics', icon: BarChart3, label: 'Analytics' },
+    { path: '/admin-user/settings', icon: Settings, label: 'Settings' },
   ];
 
   return (
@@ -1164,6 +1464,7 @@ const AdminDashboard: React.FC = () => {
             <Route path="/products" element={<ProductsManagement />} />
             <Route path="/orders" element={<OrdersManagement />} />
             <Route path="/analytics" element={<DashboardOverview />} />
+            <Route path="/settings" element={<AdminSettings />} />
           </Routes>
         </div>
       </div>

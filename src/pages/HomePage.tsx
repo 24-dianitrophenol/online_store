@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Banner from '../components/adverts/Banner';
 import ProductGrid from '../components/products/ProductGrid';
 import CategorySelector from '../components/products/CategorySelector';
-import { Search, ShoppingBag, Tag, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
+import { Search, ShoppingBag, Tag, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { PROMOTIONS, ADVERTS } from '../mocks/data';
 import { useProducts, useCategories, useSupabaseStatus } from '../hooks/useDatabase';
 import { useCart } from '../context/CartContext';
@@ -16,11 +16,11 @@ const HomePage: React.FC = () => {
   const sliderRef = useRef<HTMLDivElement>(null);
   const { isConfigured } = useSupabaseStatus();
 
-  // Fetch data from database with enhanced real-time sync
+  // Fetch data from database with enhanced real-time sync and automatic refresh
   const { products, loading: productsLoading, error: productsError, refetch: refetchProducts } = useProducts();
   const { categories, loading: categoriesLoading, error: categoriesError } = useCategories();
 
-  // Enhanced real-time sync effect
+  // Enhanced real-time sync effect with automatic refresh
   useEffect(() => {
     console.log('🏠 HomePage: Setting up real-time product sync...');
     
@@ -34,6 +34,12 @@ const HomePage: React.FC = () => {
       refetchProducts();
     };
 
+    // Auto-refresh every 30 seconds to ensure data is up to date
+    const autoRefreshInterval = setInterval(() => {
+      console.log('🔄 Auto-refreshing products...');
+      refetchProducts();
+    }, 30000);
+
     // Listen for product change events
     window.addEventListener('productCreated', handleProductChange as EventListener);
     window.addEventListener('productUpdated', handleProductChange as EventListener);
@@ -41,6 +47,7 @@ const HomePage: React.FC = () => {
     window.addEventListener('forceProductRefresh', handleForceRefresh);
 
     return () => {
+      clearInterval(autoRefreshInterval);
       window.removeEventListener('productCreated', handleProductChange as EventListener);
       window.removeEventListener('productUpdated', handleProductChange as EventListener);
       window.removeEventListener('productDeleted', handleProductChange as EventListener);
@@ -79,18 +86,12 @@ const HomePage: React.FC = () => {
     }
   };
 
-  const handleManualRefresh = () => {
-    console.log('🔄 Manual refresh triggered from HomePage');
-    refetchProducts();
-  };
-
   if (productsLoading || categoriesLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading products from database...</p>
-          <p className="text-xs text-gray-500 dark:text-gray-500">Real-time sync enabled</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading products...</p>
         </div>
       </div>
     );
@@ -205,9 +206,9 @@ const HomePage: React.FC = () => {
 
         {/* Right Column - Search, Categories, and Products */}
         <div className="w-full md:w-2/3">
-          {/* Search Bar with Refresh Button */}
-          <div className="flex gap-2 mb-6">
-            <div className="relative flex-1">
+          {/* Search Bar - No manual refresh button */}
+          <div className="mb-6">
+            <div className="relative">
               <input
                 type="text"
                 placeholder="Search products..."
@@ -217,13 +218,6 @@ const HomePage: React.FC = () => {
               />
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             </div>
-            <button
-              onClick={handleManualRefresh}
-              className="px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              title="Refresh products"
-            >
-              <RefreshCw size={20} className="text-gray-600 dark:text-gray-300" />
-            </button>
           </div>
 
           {/* Categories */}
@@ -242,41 +236,26 @@ const HomePage: React.FC = () => {
                 <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
                 <div>
                   <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                    Error loading data from database
+                    Error loading data
                   </p>
                   <p className="text-xs text-red-600 dark:text-red-300">
                     {productsError || categoriesError}
                   </p>
-                  <button
-                    onClick={handleManualRefresh}
-                    className="mt-2 text-xs text-red-600 dark:text-red-300 underline hover:no-underline"
-                  >
-                    Try refreshing
-                  </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Products Grid */}
+          {/* Products Grid with Mobile-Responsive Layout */}
           <ProductGrid 
             products={filteredProducts} 
             onOrder={handleOrder}
             emptyMessage={
               searchQuery || selectedCategory 
                 ? "No products match your search criteria" 
-                : "No products available in database"
+                : "No products available"
             }
           />
-
-          {/* Database Status Indicator */}
-          {isConfigured && products.length > 0 && (
-            <div className="mt-6 text-center">
-              <p className="text-xs text-green-600 dark:text-green-400">
-                ✅ Connected to database • {products.length} products loaded • Real-time sync active
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>

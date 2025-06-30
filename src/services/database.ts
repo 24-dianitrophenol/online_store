@@ -32,6 +32,21 @@ const getCurrentAdminId = (): string | null => {
   return null
 }
 
+// Enhanced event dispatching for real-time sync
+const dispatchProductEvent = (eventType: string, data: any) => {
+  console.log(`🔄 Dispatching ${eventType} event:`, data)
+  
+  // Dispatch multiple events to ensure all listeners catch the change
+  window.dispatchEvent(new CustomEvent(eventType, { detail: data }))
+  window.dispatchEvent(new CustomEvent('productChanged', { detail: { type: eventType, data } }))
+  window.dispatchEvent(new CustomEvent('forceProductRefresh'))
+  
+  // Also trigger a general refresh event
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('refreshProducts'))
+  }, 100)
+}
+
 // Admin Authentication with enhanced error handling
 export const adminAuthService = {
   async signIn(username: string, password: string) {
@@ -291,7 +306,7 @@ export const productService = {
 
       const client = await getAuthenticatedClient()
       
-      console.log('Creating product with enhanced function:', product, images)
+      console.log('🚀 Creating product with enhanced function:', product, images)
       console.log('Using admin ID:', adminId)
       
       // Validate required fields
@@ -322,10 +337,14 @@ export const productService = {
         throw new Error(`Failed to create product: ${error.message}`)
       }
 
-      console.log('Product created successfully:', data)
+      console.log('✅ Product created successfully:', data)
       
-      // Trigger a refresh event for real-time sync
-      window.dispatchEvent(new CustomEvent('productCreated', { detail: { data } }))
+      // Enhanced event dispatching for real-time sync
+      dispatchProductEvent('productCreated', { 
+        id: data.id, 
+        product: data,
+        timestamp: new Date().toISOString()
+      })
       
       return data
     } catch (error) {
@@ -348,7 +367,7 @@ export const productService = {
 
       const client = await getAuthenticatedClient()
       
-      console.log('Updating product with enhanced function:', id, updates)
+      console.log('📝 Updating product with enhanced function:', id, updates)
       console.log('Using admin ID:', adminId)
       
       // Use the enhanced product update function with admin_id as first parameter
@@ -373,10 +392,15 @@ export const productService = {
         throw new Error(`Failed to update product: ${error.message}`)
       }
 
-      console.log('Product updated successfully:', data)
+      console.log('✅ Product updated successfully:', data)
       
-      // Trigger a refresh event for real-time sync
-      window.dispatchEvent(new CustomEvent('productUpdated', { detail: { id, data } }))
+      // Enhanced event dispatching for real-time sync
+      dispatchProductEvent('productUpdated', { 
+        id, 
+        updates, 
+        data,
+        timestamp: new Date().toISOString()
+      })
       
       return data
     } catch (error) {
@@ -403,8 +427,11 @@ export const productService = {
         throw new Error(`Failed to delete product: ${error.message}`)
       }
       
-      // Trigger a refresh event for real-time sync
-      window.dispatchEvent(new CustomEvent('productDeleted', { detail: { id } }))
+      // Enhanced event dispatching for real-time sync
+      dispatchProductEvent('productDeleted', { 
+        id,
+        timestamp: new Date().toISOString()
+      })
       
       return true
     } catch (error) {
@@ -773,7 +800,7 @@ export const analyticsService = {
   }
 }
 
-// Real-time sync utilities
+// Enhanced real-time sync utilities
 export const syncService = {
   // Subscribe to product changes for real-time updates
   subscribeToProductChanges(callback: (payload: any) => void) {
@@ -795,9 +822,18 @@ export const syncService = {
     }
   },
 
-  // Trigger manual refresh across all components
+  // Enhanced manual refresh across all components
   triggerProductRefresh() {
-    window.dispatchEvent(new CustomEvent('refreshProducts'))
+    console.log('🔄 Triggering manual product refresh across all components')
+    
+    // Dispatch multiple events to ensure all listeners catch the change
+    dispatchProductEvent('refreshProducts', { timestamp: new Date().toISOString() })
+    dispatchProductEvent('forceProductRefresh', { timestamp: new Date().toISOString() })
+    
+    // Also trigger a delayed refresh to ensure all components have time to update
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('delayedProductRefresh'))
+    }, 500)
   }
 }
 

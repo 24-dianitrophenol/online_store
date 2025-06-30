@@ -258,7 +258,22 @@ export const productService = {
         throw new Error(`Failed to fetch products: ${error.message}`)
       }
       
-      return data || []
+      // Process products to ensure proper image linking
+      const processedProducts = (data || []).map(product => {
+        // Get primary image from product_images table
+        const primaryImage = product.product_images?.find(img => img.is_primary)
+        // Fallback to first image if no primary image
+        const firstImage = product.product_images?.[0]
+        // Use the image from product_images table, fallback to products.image, then placeholder
+        const imageUrl = primaryImage?.image_url || firstImage?.image_url || product.image || '/images/placeholder.jpg'
+        
+        return {
+          ...product,
+          image: imageUrl // Ensure image field is properly set
+        }
+      })
+      
+      return processedProducts
     } catch (error) {
       console.error('Error fetching products:', error)
       throw error
@@ -301,7 +316,22 @@ export const productService = {
         throw new Error(`Failed to fetch products: ${error.message}`)
       }
       
-      return data || []
+      // Process products to ensure proper image linking for admin
+      const processedProducts = (data || []).map(product => {
+        // Get primary image from product_images table
+        const primaryImage = product.product_images?.find(img => img.is_primary)
+        // Fallback to first image if no primary image
+        const firstImage = product.product_images?.[0]
+        // Use the image from product_images table, fallback to products.image, then placeholder
+        const imageUrl = primaryImage?.image_url || firstImage?.image_url || product.image || '/images/placeholder.jpg'
+        
+        return {
+          ...product,
+          image: imageUrl // Ensure image field is properly set
+        }
+      })
+      
+      return processedProducts
     } catch (error) {
       console.error('Error fetching admin products:', error)
       throw error
@@ -342,6 +372,18 @@ export const productService = {
       if (error) {
         console.error('Error fetching product:', error)
         throw new Error(`Failed to fetch product: ${error.message}`)
+      }
+      
+      // Process product to ensure proper image linking
+      if (data) {
+        const primaryImage = data.product_images?.find(img => img.is_primary)
+        const firstImage = data.product_images?.[0]
+        const imageUrl = primaryImage?.image_url || firstImage?.image_url || data.image || '/images/placeholder.jpg'
+        
+        return {
+          ...data,
+          image: imageUrl
+        }
       }
       
       return data
@@ -583,6 +625,14 @@ export const productImageService = {
       if (error) {
         console.error('Error adding product image:', error)
         throw new Error(`Failed to add product image: ${error.message}`)
+      }
+      
+      // Update the main products table image field if this is primary
+      if (isPrimary) {
+        await client
+          .from('products')
+          .update({ image: imageUrl })
+          .eq('id', productId)
       }
       
       return data

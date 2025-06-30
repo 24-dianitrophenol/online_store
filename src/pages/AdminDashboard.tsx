@@ -25,7 +25,11 @@ import {
   Menu,
   Image as ImageIcon,
   Upload,
-  RefreshCw
+  RefreshCw,
+  User,
+  Lock,
+  Mail,
+  Shield
 } from 'lucide-react';
 import { adminAuthService, productService, categoryService, orderService, analyticsService } from '../services/database';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -1024,6 +1028,346 @@ const OrdersManagement: React.FC = () => {
   );
 };
 
+// Admin Settings Component
+const AdminSettings: React.FC = () => {
+  const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | null; text: string }>({ type: null, text: '' });
+  
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    full_name: '',
+    current_password: '',
+    new_password: '',
+    confirm_password: ''
+  });
+
+  useEffect(() => {
+    const loadCurrentAdmin = async () => {
+      try {
+        const admin = await adminAuthService.getCurrentAdmin();
+        if (admin) {
+          setCurrentAdmin(admin);
+          setFormData({
+            username: admin.username,
+            email: admin.email,
+            full_name: admin.full_name,
+            current_password: '',
+            new_password: '',
+            confirm_password: ''
+          });
+        }
+      } catch (error) {
+        console.error('Error loading admin data:', error);
+        setMessage({ type: 'error', text: 'Failed to load admin data' });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCurrentAdmin();
+  }, []);
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear message when user starts typing
+    if (message.type) {
+      setMessage({ type: null, text: '' });
+    }
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setMessage({ type: null, text: '' });
+
+    try {
+      // Validate form data
+      if (!formData.username.trim()) {
+        throw new Error('Username is required');
+      }
+      if (!formData.email.trim()) {
+        throw new Error('Email is required');
+      }
+      if (!formData.full_name.trim()) {
+        throw new Error('Full name is required');
+      }
+
+      // If changing password, validate password fields
+      if (formData.new_password) {
+        if (!formData.current_password) {
+          throw new Error('Current password is required to change password');
+        }
+        if (formData.new_password.length < 6) {
+          throw new Error('New password must be at least 6 characters long');
+        }
+        if (formData.new_password !== formData.confirm_password) {
+          throw new Error('New passwords do not match');
+        }
+      }
+
+      // Simulate API call to update admin profile
+      // In a real implementation, this would call a Supabase function
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Update local state
+      const updatedAdmin = {
+        ...currentAdmin!,
+        username: formData.username.trim(),
+        email: formData.email.trim(),
+        full_name: formData.full_name.trim()
+      };
+      
+      setCurrentAdmin(updatedAdmin);
+      
+      // Update localStorage
+      localStorage.setItem('admin_user', JSON.stringify(updatedAdmin));
+
+      // Clear password fields
+      setFormData(prev => ({
+        ...prev,
+        current_password: '',
+        new_password: '',
+        confirm_password: ''
+      }));
+
+      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+
+    } catch (error) {
+      setMessage({ 
+        type: 'error', 
+        text: error instanceof Error ? error.message : 'Failed to update profile' 
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentAdmin) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center space-y-4 max-w-md">
+          <AlertCircle className="mx-auto text-red-500" size={48} />
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Access Denied</h2>
+          <p className="text-gray-600 dark:text-gray-400">Unable to load admin settings</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Settings className="text-primary" size={32} />
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Admin Settings</h1>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Profile Information Card */}
+        <div className="lg:col-span-1">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Current Profile</h2>
+            
+            <div className="text-center mb-6">
+              <div className="w-20 h-20 bg-orange-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-white text-2xl font-bold">
+                  {currentAdmin.full_name.charAt(0)}
+                </span>
+              </div>
+              <h3 className="font-semibold text-gray-900 dark:text-white">{currentAdmin.full_name}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">@{currentAdmin.username}</p>
+              <span className="inline-block mt-2 px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded-full">
+                {currentAdmin.role}
+              </span>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-2">
+                <Mail size={16} className="text-gray-400" />
+                <span className="text-gray-600 dark:text-gray-300">{currentAdmin.email}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <User size={16} className="text-gray-400" />
+                <span className="text-gray-600 dark:text-gray-300">{currentAdmin.username}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Shield size={16} className="text-gray-400" />
+                <span className="text-gray-600 dark:text-gray-300">{currentAdmin.role}</span>
+              </div>
+              {currentAdmin.last_login && (
+                <div className="flex items-center gap-2">
+                  <Clock size={16} className="text-gray-400" />
+                  <span className="text-gray-600 dark:text-gray-300">
+                    Last login: {new Date(currentAdmin.last_login).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Settings Form */}
+        <div className="lg:col-span-2">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Update Profile</h2>
+
+            {/* Status Message */}
+            {message.type && (
+              <div className={`p-4 rounded-lg mb-6 ${
+                message.type === 'success' 
+                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+                  : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {message.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                  <span className="font-medium">{message.text}</span>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfile} className="space-y-6">
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <h3 className="text-md font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">
+                  Basic Information
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Username *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.username}
+                      onChange={(e) => handleInputChange('username', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => handleInputChange('email', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.full_name}
+                    onChange={(e) => handleInputChange('full_name', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Password Change */}
+              <div className="space-y-4">
+                <h3 className="text-md font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">
+                  Change Password
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Leave password fields empty if you don't want to change your password.
+                </p>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Current Password
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.current_password}
+                    onChange={(e) => handleInputChange('current_password', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                    placeholder="Enter current password"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      New Password
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.new_password}
+                      onChange={(e) => handleInputChange('new_password', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                      placeholder="Enter new password"
+                      minLength={6}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.confirm_password}
+                      onChange={(e) => handleInputChange('confirm_password', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
+                      placeholder="Confirm new password"
+                      minLength={6}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+                >
+                  {saving ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={20} />
+                      Save Changes
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main Admin Dashboard Component
 const AdminDashboard: React.FC = () => {
   const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
@@ -1080,6 +1424,7 @@ const AdminDashboard: React.FC = () => {
     { path: '/admin-user/products', icon: Package, label: 'Products' },
     { path: '/admin-user/orders', icon: ShoppingCart, label: 'Orders' },
     { path: '/admin-user/analytics', icon: BarChart3, label: 'Analytics' },
+    { path: '/admin-user/settings', icon: Settings, label: 'Settings' },
   ];
 
   return (
@@ -1164,6 +1509,7 @@ const AdminDashboard: React.FC = () => {
             <Route path="/products" element={<ProductsManagement />} />
             <Route path="/orders" element={<OrdersManagement />} />
             <Route path="/analytics" element={<DashboardOverview />} />
+            <Route path="/settings" element={<AdminSettings />} />
           </Routes>
         </div>
       </div>

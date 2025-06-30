@@ -169,6 +169,8 @@ export const productService = {
     }
 
     try {
+      console.log('🔄 Fetching products for public view...')
+      
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -199,6 +201,7 @@ export const productService = {
         throw new Error(`Failed to fetch products: ${error.message}`)
       }
       
+      console.log(`✅ Successfully fetched ${data?.length || 0} products`)
       return data || []
     } catch (error) {
       console.error('Error fetching products:', error)
@@ -449,6 +452,8 @@ export const categoryService = {
     }
 
     try {
+      console.log('🔄 Fetching categories...')
+      
       const { data, error } = await supabase
         .from('categories')
         .select('*')
@@ -460,6 +465,7 @@ export const categoryService = {
         throw new Error(`Failed to fetch categories: ${error.message}`)
       }
       
+      console.log(`✅ Successfully fetched ${data?.length || 0} categories`)
       return data || []
     } catch (error) {
       console.error('Error fetching categories:', error)

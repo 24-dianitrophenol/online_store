@@ -59,6 +59,12 @@ export const useProducts = () => {
       setError(null)
       
       console.log('🔄 Fetching products from database...')
+      
+      // Check if Supabase is configured
+      if (!isSupabaseConfigured()) {
+        throw new Error('Supabase is not configured. Please connect to Supabase first.')
+      }
+      
       const data = await productService.getAll()
       const convertedProducts = data.map(convertProduct)
       
@@ -143,6 +149,12 @@ export const useCategories = () => {
       try {
         setLoading(true)
         setError(null)
+        
+        // Check if Supabase is configured
+        if (!isSupabaseConfigured()) {
+          throw new Error('Supabase is not configured. Please connect to Supabase first.')
+        }
+        
         const data = await categoryService.getAll()
         setCategories(data.map(convertCategory))
       } catch (err) {
@@ -183,6 +195,12 @@ export const useAdminProducts = () => {
       setLoading(true)
       setError(null)
       console.log('🔄 Admin: Fetching products from database...')
+      
+      // Check if Supabase is configured
+      if (!isSupabaseConfigured()) {
+        throw new Error('Supabase is not configured. Please connect to Supabase first.')
+      }
+      
       const data = await productService.getAllForAdmin()
       console.log(`✅ Admin: Loaded ${data.length} products`)
       setProducts(data)

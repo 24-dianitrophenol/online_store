@@ -142,65 +142,6 @@ export const adminAuthService = {
       console.error('Get current admin error:', error)
       return null
     }
-  },
-
-  async updateProfile(profileData: { username: string; email: string; full_name: string }) {
-    if (!isSupabaseConfigured()) {
-      throw new Error('Supabase is not configured. Please connect to Supabase first.')
-    }
-
-    const adminId = getCurrentAdminId()
-    if (!adminId) {
-      throw new Error('Admin authentication required')
-    }
-
-    try {
-      const { data, error } = await supabase.rpc('update_admin_profile', {
-        p_admin_id: adminId,
-        p_username: profileData.username,
-        p_email: profileData.email,
-        p_full_name: profileData.full_name
-      })
-
-      if (error) {
-        console.error('Profile update error:', error)
-        throw new Error(`Failed to update profile: ${error.message}`)
-      }
-
-      return data
-    } catch (error) {
-      console.error('Error updating admin profile:', error)
-      throw error
-    }
-  },
-
-  async changePassword(currentPassword: string, newPassword: string) {
-    if (!isSupabaseConfigured()) {
-      throw new Error('Supabase is not configured. Please connect to Supabase first.')
-    }
-
-    const adminId = getCurrentAdminId()
-    if (!adminId) {
-      throw new Error('Admin authentication required')
-    }
-
-    try {
-      const { data, error } = await supabase.rpc('change_admin_password', {
-        p_admin_id: adminId,
-        p_current_password: currentPassword,
-        p_new_password: newPassword
-      })
-
-      if (error) {
-        console.error('Password change error:', error)
-        throw new Error(`Failed to change password: ${error.message}`)
-      }
-
-      return data
-    } catch (error) {
-      console.error('Error changing admin password:', error)
-      throw error
-    }
   }
 }
 
@@ -258,22 +199,7 @@ export const productService = {
         throw new Error(`Failed to fetch products: ${error.message}`)
       }
       
-      // Process products to ensure proper image linking
-      const processedProducts = (data || []).map(product => {
-        // Get primary image from product_images table
-        const primaryImage = product.product_images?.find(img => img.is_primary)
-        // Fallback to first image if no primary image
-        const firstImage = product.product_images?.[0]
-        // Use the image from product_images table, fallback to products.image, then placeholder
-        const imageUrl = primaryImage?.image_url || firstImage?.image_url || product.image || '/images/placeholder.jpg'
-        
-        return {
-          ...product,
-          image: imageUrl // Ensure image field is properly set
-        }
-      })
-      
-      return processedProducts
+      return data || []
     } catch (error) {
       console.error('Error fetching products:', error)
       throw error
@@ -316,22 +242,7 @@ export const productService = {
         throw new Error(`Failed to fetch products: ${error.message}`)
       }
       
-      // Process products to ensure proper image linking for admin
-      const processedProducts = (data || []).map(product => {
-        // Get primary image from product_images table
-        const primaryImage = product.product_images?.find(img => img.is_primary)
-        // Fallback to first image if no primary image
-        const firstImage = product.product_images?.[0]
-        // Use the image from product_images table, fallback to products.image, then placeholder
-        const imageUrl = primaryImage?.image_url || firstImage?.image_url || product.image || '/images/placeholder.jpg'
-        
-        return {
-          ...product,
-          image: imageUrl // Ensure image field is properly set
-        }
-      })
-      
-      return processedProducts
+      return data || []
     } catch (error) {
       console.error('Error fetching admin products:', error)
       throw error
@@ -374,18 +285,6 @@ export const productService = {
         throw new Error(`Failed to fetch product: ${error.message}`)
       }
       
-      // Process product to ensure proper image linking
-      if (data) {
-        const primaryImage = data.product_images?.find(img => img.is_primary)
-        const firstImage = data.product_images?.[0]
-        const imageUrl = primaryImage?.image_url || firstImage?.image_url || data.image || '/images/placeholder.jpg'
-        
-        return {
-          ...data,
-          image: imageUrl
-        }
-      }
-      
       return data
     } catch (error) {
       console.error('Error fetching product:', error)
@@ -393,12 +292,18 @@ export const productService = {
     }
   },
 
-  async create(adminId: string, product: any, images: string[] = []) {
+  async create(product: Tables['products']['Insert'], images: string[] = []) {
     if (!isSupabaseConfigured()) {
       throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
+      // Get current admin ID - this is critical for the new function signature
+      const adminId = getCurrentAdminId()
+      if (!adminId) {
+        throw new Error('Admin authentication required - please log in again')
+      }
+
       const client = await getAuthenticatedClient()
       
       console.log('🚀 Creating product with enhanced function:', product, images)
@@ -448,12 +353,18 @@ export const productService = {
     }
   },
 
-  async update(adminId: string, id: string, updates: any) {
+  async update(id: string, updates: Tables['products']['Update']) {
     if (!isSupabaseConfigured()) {
       throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
+      // Get current admin ID - this is critical for the new function signature
+      const adminId = getCurrentAdminId()
+      if (!adminId) {
+        throw new Error('Admin authentication required - please log in again')
+      }
+
       const client = await getAuthenticatedClient()
       
       console.log('📝 Updating product with enhanced function:', id, updates)
@@ -613,14 +524,6 @@ export const productImageService = {
       if (error) {
         console.error('Error adding product image:', error)
         throw new Error(`Failed to add product image: ${error.message}`)
-      }
-      
-      // Update the main products table image field if this is primary
-      if (isPrimary) {
-        await client
-          .from('products')
-          .update({ image: imageUrl })
-          .eq('id', productId)
       }
       
       return data

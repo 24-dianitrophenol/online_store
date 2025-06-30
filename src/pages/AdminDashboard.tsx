@@ -25,8 +25,7 @@ import {
   Menu,
   Image as ImageIcon,
   Upload,
-  RefreshCw,
-  User
+  RefreshCw
 } from 'lucide-react';
 import { adminAuthService, productService, categoryService, orderService, analyticsService } from '../services/database';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -228,6 +227,7 @@ const ProductsManagement: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [schemaError, setSchemaError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     id: '',
@@ -304,10 +304,11 @@ const ProductsManagement: React.FC = () => {
     console.log('📷 Image removed');
   };
 
-  // Enhanced form submission with improved error detection and auto-close
+  // Enhanced form submission with improved error detection
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setUploading(true);
+    setSchemaError(null);
     setOperationStatus({ type: null, message: '' });
 
     try {
@@ -383,20 +384,46 @@ const ProductsManagement: React.FC = () => {
 
       // AUTO-CLOSE MODAL IMMEDIATELY AFTER SUCCESS
       console.log('🎯 Auto-closing modal after successful operation');
+      resetForm(); // This will close the modal and reset the form
       
-      // Show success message briefly, then close modal
+      // Show success message for a few seconds, then clear it
       setTimeout(() => {
-        resetForm(); // This will close the modal and reset the form
         setOperationStatus({ type: null, message: '' });
-      }, 1500); // Close after 1.5 seconds to show success message
+      }, 4000);
 
     } catch (error) {
       console.error('❌ Admin: Error saving product:', error);
       
-      setOperationStatus({
-        type: 'error',
-        message: error instanceof Error ? error.message : `Failed to ${editingProduct ? 'update' : 'create'} product. Please try again.`
-      });
+      // Enhanced error detection for database schema issues
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        
+        // Check for PostgreSQL function not found errors (error code 42883)
+        if (errorMessage.includes('function') && 
+            (errorMessage.includes('does not exist') || 
+             errorMessage.includes('log_admin_action') ||
+             errorMessage.includes('42883'))) {
+          setSchemaError('Database schema synchronization issue detected. The database functions are missing or outdated. Please refresh your Supabase schema cache in the dashboard, then try again.');
+        } 
+        // Check for other schema-related issues
+        else if (errorMessage.includes('schema cache') || 
+                 errorMessage.includes('column not found') ||
+                 errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
+          setSchemaError('Database schema issue detected. Please refresh your Supabase schema cache in the dashboard, then try again.');
+        } 
+        // Handle other specific errors
+        else {
+          setOperationStatus({
+            type: 'error',
+            message: `Failed to ${editingProduct ? 'update' : 'create'} product: ${error.message}`
+          });
+        }
+      } else {
+        setOperationStatus({
+          type: 'error',
+          message: `Failed to ${editingProduct ? 'update' : 'create'} product. Please try again.`
+        });
+      }
     } finally {
       setUploading(false);
     }
@@ -417,7 +444,7 @@ const ProductsManagement: React.FC = () => {
     setProductImage('');
     setEditingProduct(null);
     setShowAddForm(false); // Close the modal
-    setOperationStatus({ type: null, message: '' });
+    setSchemaError(null);
     console.log('🔄 Form reset and modal closed');
   };
 
@@ -437,6 +464,7 @@ const ProductsManagement: React.FC = () => {
     setProductImage(product.image || '');
     setEditingProduct(product);
     setShowAddForm(true);
+    setSchemaError(null);
     setOperationStatus({ type: null, message: '' });
   };
 
@@ -565,6 +593,45 @@ const ProductsManagement: React.FC = () => {
             {operationStatus.type === 'error' && <AlertCircle size={20} />}
             {operationStatus.type === 'info' && <Clock size={20} />}
             <span className="font-medium">{operationStatus.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Schema Error Alert */}
+      {schemaError && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-800 dark:text-red-200">Database Schema Synchronization Issue</h3>
+              <p className="text-red-700 dark:text-red-300 text-sm mt-1">{schemaError}</p>
+              <div className="mt-3 space-y-2">
+                <p className="text-red-600 dark:text-red-400 text-sm font-medium">To fix this issue:</p>
+                <ol className="text-red-600 dark:text-red-400 text-sm list-decimal list-inside space-y-1 ml-2">
+                  <li>Open your Supabase Dashboard</li>
+                  <li>Go to the SQL Editor or Database section</li>
+                  <li>Refresh the schema cache or run the latest migrations</li>
+                  <li>Return here and try the operation again</li>
+                </ol>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => setSchemaError(null)}
+                    className="text-sm px-3 py-1 bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-700 transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                  <a
+                    href="https://supabase.com/dashboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-1"
+                  >
+                    <RefreshCw size={14} />
+                    Open Supabase Dashboard
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -957,307 +1024,6 @@ const OrdersManagement: React.FC = () => {
   );
 };
 
-// Admin Settings Component
-const AdminSettings: React.FC = () => {
-  const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  const [profileData, setProfileData] = useState({
-    username: '',
-    email: '',
-    full_name: ''
-  });
-
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-
-  useEffect(() => {
-    const loadCurrentAdmin = async () => {
-      try {
-        const admin = await adminAuthService.getCurrentAdmin();
-        if (admin) {
-          setCurrentAdmin(admin);
-          setProfileData({
-            username: admin.username,
-            email: admin.email,
-            full_name: admin.full_name
-          });
-        }
-      } catch (error) {
-        console.error('Error loading admin:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCurrentAdmin();
-  }, []);
-
-  const handleProfileUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setUpdating(true);
-    setMessage(null);
-
-    try {
-      await adminAuthService.updateProfile(profileData);
-      
-      // Update localStorage with new profile data
-      const updatedAdmin = { ...currentAdmin, ...profileData };
-      localStorage.setItem('admin_user', JSON.stringify(updatedAdmin));
-      setCurrentAdmin(updatedAdmin);
-      
-      setMessage({ type: 'success', text: 'Profile updated successfully!' });
-    } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: error instanceof Error ? error.message : 'Failed to update profile' 
-      });
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setChangingPassword(true);
-    setMessage(null);
-
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setMessage({ type: 'error', text: 'New passwords do not match' });
-      setChangingPassword(false);
-      return;
-    }
-
-    if (passwordData.newPassword.length < 6) {
-      setMessage({ type: 'error', text: 'New password must be at least 6 characters long' });
-      setChangingPassword(false);
-      return;
-    }
-
-    try {
-      await adminAuthService.changePassword(passwordData.currentPassword, passwordData.newPassword);
-      
-      setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      });
-      
-      setMessage({ type: 'success', text: 'Password changed successfully!' });
-    } catch (error) {
-      setMessage({ 
-        type: 'error', 
-        text: error instanceof Error ? error.message : 'Failed to change password' 
-      });
-    } finally {
-      setChangingPassword(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading settings...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!currentAdmin) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center space-y-4">
-          <AlertCircle className="mx-auto text-red-500" size={48} />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Access Denied</h2>
-          <p className="text-gray-600 dark:text-gray-400">Unable to load admin settings</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Admin Settings</h1>
-      
-      {/* Message Display */}
-      {message && (
-        <div className={`p-4 rounded-lg border ${
-          message.type === 'success' 
-            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
-            : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
-        }`}>
-          <div className="flex items-center gap-2">
-            {message.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-            <span className="font-medium">{message.text}</span>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Profile Information Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-          <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Profile Information</h2>
-          
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xl">
-              {currentAdmin.full_name.charAt(0)}
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{currentAdmin.full_name}</h3>
-              <p className="text-gray-600 dark:text-gray-400">@{currentAdmin.username}</p>
-              <span className="inline-block px-2 py-1 bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-200 text-xs rounded-full mt-1">
-                {currentAdmin.role}
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Email</label>
-              <p className="text-gray-900 dark:text-white">{currentAdmin.email}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Last Login</label>
-              <p className="text-gray-900 dark:text-white">
-                {currentAdmin.last_login 
-                  ? new Date(currentAdmin.last_login).toLocaleString()
-                  : 'Never'
-                }
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Settings Forms */}
-        <div className="space-y-6">
-          {/* Profile Update Form */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-            <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Update Profile</h2>
-            
-            <form onSubmit={handleProfileUpdate} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Username</label>
-                <input
-                  type="text"
-                  value={profileData.username}
-                  onChange={(e) => setProfileData({...profileData, username: e.target.value})}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2">Email</label>
-                <input
-                  type="email"
-                  value={profileData.email}
-                  onChange={(e) => setProfileData({...profileData, email: e.target.value})}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2">Full Name</label>
-                <input
-                  type="text"
-                  value={profileData.full_name}
-                  onChange={(e) => setProfileData({...profileData, full_name: e.target.value})}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                />
-              </div>
-              
-              <button
-                type="submit"
-                disabled={updating}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
-              >
-                {updating ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Updating...
-                  </>
-                ) : (
-                  <>
-                    <User size={18} />
-                    Update Profile
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-
-          {/* Password Change Form */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
-            <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Change Password</h2>
-            
-            <form onSubmit={handlePasswordChange} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Current Password</label>
-                <input
-                  type="password"
-                  value={passwordData.currentPassword}
-                  onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2">New Password</label>
-                <input
-                  type="password"
-                  value={passwordData.newPassword}
-                  onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
-                  required
-                  minLength={6}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2">Confirm New Password</label>
-                <input
-                  type="password"
-                  value={passwordData.confirmPassword}
-                  onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
-                  required
-                  minLength={6}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700"
-                />
-              </div>
-              
-              <button
-                type="submit"
-                disabled={changingPassword}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
-              >
-                {changingPassword ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Changing...
-                  </>
-                ) : (
-                  'Change Password'
-                )}
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // Main Admin Dashboard Component
 const AdminDashboard: React.FC = () => {
   const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(null);
@@ -1314,7 +1080,6 @@ const AdminDashboard: React.FC = () => {
     { path: '/admin-user/products', icon: Package, label: 'Products' },
     { path: '/admin-user/orders', icon: ShoppingCart, label: 'Orders' },
     { path: '/admin-user/analytics', icon: BarChart3, label: 'Analytics' },
-    { path: '/admin-user/settings', icon: Settings, label: 'Settings' },
   ];
 
   return (
@@ -1399,7 +1164,6 @@ const AdminDashboard: React.FC = () => {
             <Route path="/products" element={<ProductsManagement />} />
             <Route path="/orders" element={<OrdersManagement />} />
             <Route path="/analytics" element={<DashboardOverview />} />
-            <Route path="/settings" element={<AdminSettings />} />
           </Routes>
         </div>
       </div>

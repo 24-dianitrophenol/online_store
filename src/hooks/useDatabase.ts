@@ -172,7 +172,7 @@ export const useProductUpdates = () => {
   return { lastUpdate, triggerUpdate }
 }
 
-// Enhanced admin products hook with immediate real-time sync and auto-closing modal
+// Enhanced admin products hook with immediate real-time sync
 export const useAdminProducts = () => {
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -198,22 +198,7 @@ export const useAdminProducts = () => {
   const createProduct = async (productData: any, images: string[] = []) => {
     try {
       console.log('🚀 Admin: Creating product:', productData, images)
-      
-      // Get current admin ID from localStorage
-      const adminUser = localStorage.getItem('admin_user')
-      if (!adminUser) {
-        throw new Error('Admin authentication required - please log in again')
-      }
-      
-      const admin = JSON.parse(adminUser)
-      const adminId = admin.id
-      
-      if (!adminId) {
-        throw new Error('Admin ID not found - please log in again')
-      }
-      
-      // Call the enhanced function with admin ID as first parameter
-      await productService.create(adminId, productData, images)
+      await productService.create(productData, images)
       await fetchProducts() // Refresh the admin list
       syncService.triggerProductRefresh() // Trigger refresh on main website
       console.log('✅ Admin: Product created and all lists refreshed')
@@ -227,22 +212,7 @@ export const useAdminProducts = () => {
   const updateProduct = async (id: string, updates: any) => {
     try {
       console.log('📝 Admin: Updating product:', id, updates)
-      
-      // Get current admin ID from localStorage
-      const adminUser = localStorage.getItem('admin_user')
-      if (!adminUser) {
-        throw new Error('Admin authentication required - please log in again')
-      }
-      
-      const admin = JSON.parse(adminUser)
-      const adminId = admin.id
-      
-      if (!adminId) {
-        throw new Error('Admin ID not found - please log in again')
-      }
-      
-      // Call the enhanced function with admin ID as first parameter
-      await productService.update(adminId, id, updates)
+      await productService.update(id, updates)
       await fetchProducts() // Refresh the admin list
       syncService.triggerProductRefresh() // Trigger refresh on main website
       console.log('✅ Admin: Product updated and all lists refreshed')

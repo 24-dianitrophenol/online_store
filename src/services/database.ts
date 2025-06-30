@@ -283,15 +283,16 @@ export const productService = {
     }
 
     try {
-      // Get current admin ID
+      // Get current admin ID - this is critical for the new function signature
       const adminId = getCurrentAdminId()
       if (!adminId) {
-        throw new Error('Admin authentication required')
+        throw new Error('Admin authentication required - please log in again')
       }
 
       const client = await getAuthenticatedClient()
       
-      console.log('Creating product with enhanced function:', product)
+      console.log('Creating product with enhanced function:', product, images)
+      console.log('Using admin ID:', adminId)
       
       // Validate required fields
       if (!product.name || !product.description || !product.price || !product.category_id) {
@@ -339,15 +340,16 @@ export const productService = {
     }
 
     try {
-      // Get current admin ID
+      // Get current admin ID - this is critical for the new function signature
       const adminId = getCurrentAdminId()
       if (!adminId) {
-        throw new Error('Admin authentication required')
+        throw new Error('Admin authentication required - please log in again')
       }
 
       const client = await getAuthenticatedClient()
       
       console.log('Updating product with enhanced function:', id, updates)
+      console.log('Using admin ID:', adminId)
       
       // Use the enhanced product update function with admin_id as first parameter
       const { data, error } = await client.rpc('update_product_enhanced', {

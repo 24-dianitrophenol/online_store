@@ -38,13 +38,13 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onOrder }) => {
         </div>
       )}
       
-      <div className="p-3 md:p-4">
+      <div className="p-4">
         <div className="flex justify-between items-start">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-gray-900 dark:text-white text-sm md:text-base line-clamp-1">
+          <div>
+            <h3 className="font-medium text-gray-900 dark:text-white">
               {product.name}
             </h3>
-            <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 line-clamp-2 h-8 md:h-10 mt-1">
+            <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 h-10">
               {product.description}
             </p>
           </div>
@@ -52,10 +52,10 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onOrder }) => {
         
         <div className="flex justify-between items-center mt-2">
           <div>
-            <span className="font-bold text-gray-900 dark:text-white text-sm md:text-base">
+            <span className="font-bold text-gray-900 dark:text-white">
               UGX {product.price.toLocaleString()}
             </span>
-            <span className="text-xs md:text-sm text-gray-500 dark:text-gray-400 ml-1">
+            <span className="text-sm text-gray-500 dark:text-gray-400 ml-1">
               /{product.unit}
             </span>
           </div>
@@ -63,10 +63,10 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onOrder }) => {
         </div>
         
         <div className="mt-2">
-          {product.tags.slice(0, 2).map((tag) => (
+          {product.tags.map((tag) => (
             <span 
               key={tag} 
-              className="inline-block mr-1 mb-1 text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300"
+              className="inline-block mr-2 mb-1 text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300"
             >
               {tag}
             </span>
@@ -75,9 +75,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onOrder }) => {
 
         <button
           onClick={onOrder}
-          className="mt-3 md:mt-4 w-full flex items-center justify-center gap-2 bg-primary text-white py-2 rounded-lg hover:bg-primary/90 transition-colors text-sm md:text-base"
+          className="mt-4 w-full flex items-center justify-center gap-2 bg-primary text-white py-2 rounded-lg hover:bg-primary/90 transition-colors"
         >
-          <ShoppingBag size={16} className="md:w-[18px] md:h-[18px]" />
+          <ShoppingBag size={18} />
           Order Now
         </button>
       </div>

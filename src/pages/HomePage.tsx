@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Banner from '../components/adverts/Banner';
 import ProductGrid from '../components/products/ProductGrid';
 import CategorySelector from '../components/products/CategorySelector';
-import { Search, ShoppingBag, Tag, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { Search, ShoppingBag, Tag, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
 import { PROMOTIONS, ADVERTS } from '../mocks/data';
 import { useProducts, useCategories, useSupabaseStatus } from '../hooks/useDatabase';
 import { useCart } from '../context/CartContext';
@@ -79,12 +79,18 @@ const HomePage: React.FC = () => {
     }
   };
 
+  const handleManualRefresh = () => {
+    console.log('🔄 Manual refresh triggered from HomePage');
+    refetchProducts();
+  };
+
   if (productsLoading || categoriesLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading products...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading products from database...</p>
+          <p className="text-xs text-gray-500 dark:text-gray-500">Real-time sync enabled</p>
         </div>
       </div>
     );
@@ -96,9 +102,9 @@ const HomePage: React.FC = () => {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center space-y-4 max-w-md">
           <AlertCircle className="mx-auto text-red-500" size={48} />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Service Unavailable</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Database Connection Required</h2>
           <p className="text-gray-600 dark:text-gray-400">
-            Our product catalog is temporarily unavailable. Please try again later.
+            Please connect to Supabase to view products. Click the "Connect to Supabase" button in the top right corner.
           </p>
         </div>
       </div>
@@ -199,9 +205,9 @@ const HomePage: React.FC = () => {
 
         {/* Right Column - Search, Categories, and Products */}
         <div className="w-full md:w-2/3">
-          {/* Search Bar (removed refresh button) */}
-          <div className="mb-6">
-            <div className="relative">
+          {/* Search Bar with Refresh Button */}
+          <div className="flex gap-2 mb-6">
+            <div className="relative flex-1">
               <input
                 type="text"
                 placeholder="Search products..."
@@ -211,6 +217,13 @@ const HomePage: React.FC = () => {
               />
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             </div>
+            <button
+              onClick={handleManualRefresh}
+              className="px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              title="Refresh products"
+            >
+              <RefreshCw size={20} className="text-gray-600 dark:text-gray-300" />
+            </button>
           </div>
 
           {/* Categories */}
@@ -222,14 +235,25 @@ const HomePage: React.FC = () => {
             />
           </div>
 
-          {/* Error Display (simplified for customers) */}
+          {/* Error Display */}
           {(productsError || categoriesError) && (
-            <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
               <div className="flex items-center gap-2">
-                <AlertCircle className="text-yellow-500 flex-shrink-0" size={20} />
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  Some products may not be available right now. Please try again in a moment.
-                </p>
+                <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
+                <div>
+                  <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                    Error loading data from database
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-300">
+                    {productsError || categoriesError}
+                  </p>
+                  <button
+                    onClick={handleManualRefresh}
+                    className="mt-2 text-xs text-red-600 dark:text-red-300 underline hover:no-underline"
+                  >
+                    Try refreshing
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -241,9 +265,18 @@ const HomePage: React.FC = () => {
             emptyMessage={
               searchQuery || selectedCategory 
                 ? "No products match your search criteria" 
-                : "No products available"
+                : "No products available in database"
             }
           />
+
+          {/* Database Status Indicator */}
+          {isConfigured && products.length > 0 && (
+            <div className="mt-6 text-center">
+              <p className="text-xs text-green-600 dark:text-green-400">
+                ✅ Connected to database • {products.length} products loaded • Real-time sync active
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

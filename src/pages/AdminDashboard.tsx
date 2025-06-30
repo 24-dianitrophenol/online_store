@@ -304,7 +304,7 @@ const ProductsManagement: React.FC = () => {
     console.log('📷 Image removed');
   };
 
-  // Enhanced form submission with auto-close functionality
+  // Enhanced form submission with improved error detection
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setUploading(true);
@@ -394,11 +394,25 @@ const ProductsManagement: React.FC = () => {
     } catch (error) {
       console.error('❌ Admin: Error saving product:', error);
       
-      // Handle specific error types
+      // Enhanced error detection for database schema issues
       if (error instanceof Error) {
-        if (error.message.includes('schema cache') || error.message.includes('column not found')) {
+        const errorMessage = error.message.toLowerCase();
+        
+        // Check for PostgreSQL function not found errors (error code 42883)
+        if (errorMessage.includes('function') && 
+            (errorMessage.includes('does not exist') || 
+             errorMessage.includes('log_admin_action') ||
+             errorMessage.includes('42883'))) {
+          setSchemaError('Database schema synchronization issue detected. The database functions are missing or outdated. Please refresh your Supabase schema cache in the dashboard, then try again.');
+        } 
+        // Check for other schema-related issues
+        else if (errorMessage.includes('schema cache') || 
+                 errorMessage.includes('column not found') ||
+                 errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
           setSchemaError('Database schema issue detected. Please refresh your Supabase schema cache in the dashboard, then try again.');
-        } else {
+        } 
+        // Handle other specific errors
+        else {
           setOperationStatus({
             type: 'error',
             message: `Failed to ${editingProduct ? 'update' : 'create'} product: ${error.message}`
@@ -583,30 +597,39 @@ const ProductsManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Schema Error Alert */}
+      {/* Enhanced Schema Error Alert */}
       {schemaError && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
           <div className="flex items-start gap-3">
             <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
-            <div>
-              <h3 className="font-semibold text-red-800 dark:text-red-200">Schema Error</h3>
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-800 dark:text-red-200">Database Schema Synchronization Issue</h3>
               <p className="text-red-700 dark:text-red-300 text-sm mt-1">{schemaError}</p>
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={() => setSchemaError(null)}
-                  className="text-sm px-3 py-1 bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-700 transition-colors"
-                >
-                  Dismiss
-                </button>
-                <a
-                  href="https://supabase.com/dashboard"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-1"
-                >
-                  <RefreshCw size={14} />
-                  Open Supabase Dashboard
-                </a>
+              <div className="mt-3 space-y-2">
+                <p className="text-red-600 dark:text-red-400 text-sm font-medium">To fix this issue:</p>
+                <ol className="text-red-600 dark:text-red-400 text-sm list-decimal list-inside space-y-1 ml-2">
+                  <li>Open your Supabase Dashboard</li>
+                  <li>Go to the SQL Editor or Database section</li>
+                  <li>Refresh the schema cache or run the latest migrations</li>
+                  <li>Return here and try the operation again</li>
+                </ol>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => setSchemaError(null)}
+                    className="text-sm px-3 py-1 bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-700 transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                  <a
+                    href="https://supabase.com/dashboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-1"
+                  >
+                    <RefreshCw size={14} />
+                    Open Supabase Dashboard
+                  </a>
+                </div>
               </div>
             </div>
           </div>

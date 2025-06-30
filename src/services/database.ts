@@ -32,21 +32,6 @@ const getCurrentAdminId = (): string | null => {
   return null
 }
 
-// Enhanced event dispatching for real-time sync
-const dispatchProductEvent = (eventType: string, data: any) => {
-  console.log(`🔄 Dispatching ${eventType} event:`, data)
-  
-  // Dispatch multiple events to ensure all listeners catch the change
-  window.dispatchEvent(new CustomEvent(eventType, { detail: data }))
-  window.dispatchEvent(new CustomEvent('productChanged', { detail: { type: eventType, data } }))
-  window.dispatchEvent(new CustomEvent('forceProductRefresh'))
-  
-  // Also trigger a general refresh event
-  setTimeout(() => {
-    window.dispatchEvent(new CustomEvent('refreshProducts'))
-  }, 100)
-}
-
 // Admin Authentication with enhanced error handling
 export const adminAuthService = {
   async signIn(username: string, password: string) {
@@ -298,16 +283,15 @@ export const productService = {
     }
 
     try {
-      // Get current admin ID - this is critical for the new function signature
+      // Get current admin ID
       const adminId = getCurrentAdminId()
       if (!adminId) {
-        throw new Error('Admin authentication required - please log in again')
+        throw new Error('Admin authentication required')
       }
 
       const client = await getAuthenticatedClient()
       
-      console.log('🚀 Creating product with enhanced function:', product, images)
-      console.log('Using admin ID:', adminId)
+      console.log('Creating product with enhanced function:', product)
       
       // Validate required fields
       if (!product.name || !product.description || !product.price || !product.category_id) {
@@ -337,14 +321,10 @@ export const productService = {
         throw new Error(`Failed to create product: ${error.message}`)
       }
 
-      console.log('✅ Product created successfully:', data)
+      console.log('Product created successfully:', data)
       
-      // Enhanced event dispatching for real-time sync
-      dispatchProductEvent('productCreated', { 
-        id: data.id, 
-        product: data,
-        timestamp: new Date().toISOString()
-      })
+      // Trigger a refresh event for real-time sync
+      window.dispatchEvent(new CustomEvent('productCreated', { detail: { data } }))
       
       return data
     } catch (error) {
@@ -359,16 +339,15 @@ export const productService = {
     }
 
     try {
-      // Get current admin ID - this is critical for the new function signature
+      // Get current admin ID
       const adminId = getCurrentAdminId()
       if (!adminId) {
-        throw new Error('Admin authentication required - please log in again')
+        throw new Error('Admin authentication required')
       }
 
       const client = await getAuthenticatedClient()
       
-      console.log('📝 Updating product with enhanced function:', id, updates)
-      console.log('Using admin ID:', adminId)
+      console.log('Updating product with enhanced function:', id, updates)
       
       // Use the enhanced product update function with admin_id as first parameter
       const { data, error } = await client.rpc('update_product_enhanced', {
@@ -392,15 +371,10 @@ export const productService = {
         throw new Error(`Failed to update product: ${error.message}`)
       }
 
-      console.log('✅ Product updated successfully:', data)
+      console.log('Product updated successfully:', data)
       
-      // Enhanced event dispatching for real-time sync
-      dispatchProductEvent('productUpdated', { 
-        id, 
-        updates, 
-        data,
-        timestamp: new Date().toISOString()
-      })
+      // Trigger a refresh event for real-time sync
+      window.dispatchEvent(new CustomEvent('productUpdated', { detail: { id, data } }))
       
       return data
     } catch (error) {
@@ -427,11 +401,8 @@ export const productService = {
         throw new Error(`Failed to delete product: ${error.message}`)
       }
       
-      // Enhanced event dispatching for real-time sync
-      dispatchProductEvent('productDeleted', { 
-        id,
-        timestamp: new Date().toISOString()
-      })
+      // Trigger a refresh event for real-time sync
+      window.dispatchEvent(new CustomEvent('productDeleted', { detail: { id } }))
       
       return true
     } catch (error) {
@@ -800,7 +771,7 @@ export const analyticsService = {
   }
 }
 
-// Enhanced real-time sync utilities
+// Real-time sync utilities
 export const syncService = {
   // Subscribe to product changes for real-time updates
   subscribeToProductChanges(callback: (payload: any) => void) {
@@ -822,18 +793,9 @@ export const syncService = {
     }
   },
 
-  // Enhanced manual refresh across all components
+  // Trigger manual refresh across all components
   triggerProductRefresh() {
-    console.log('🔄 Triggering manual product refresh across all components')
-    
-    // Dispatch multiple events to ensure all listeners catch the change
-    dispatchProductEvent('refreshProducts', { timestamp: new Date().toISOString() })
-    dispatchProductEvent('forceProductRefresh', { timestamp: new Date().toISOString() })
-    
-    // Also trigger a delayed refresh to ensure all components have time to update
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('delayedProductRefresh'))
-    }, 500)
+    window.dispatchEvent(new CustomEvent('refreshProducts'))
   }
 }
 

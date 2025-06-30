@@ -393,18 +393,12 @@ export const productService = {
     }
   },
 
-  async create(product: Tables['products']['Insert'], images: string[] = []) {
+  async create(adminId: string, product: any, images: string[] = []) {
     if (!isSupabaseConfigured()) {
       throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
-      // Get current admin ID - this is critical for the new function signature
-      const adminId = getCurrentAdminId()
-      if (!adminId) {
-        throw new Error('Admin authentication required - please log in again')
-      }
-
       const client = await getAuthenticatedClient()
       
       console.log('🚀 Creating product with enhanced function:', product, images)
@@ -454,18 +448,12 @@ export const productService = {
     }
   },
 
-  async update(id: string, updates: Tables['products']['Update']) {
+  async update(adminId: string, id: string, updates: any) {
     if (!isSupabaseConfigured()) {
       throw new Error('Supabase is not configured. Please connect to Supabase first.')
     }
 
     try {
-      // Get current admin ID - this is critical for the new function signature
-      const adminId = getCurrentAdminId()
-      if (!adminId) {
-        throw new Error('Admin authentication required - please log in again')
-      }
-
       const client = await getAuthenticatedClient()
       
       console.log('📝 Updating product with enhanced function:', id, updates)

@@ -219,7 +219,7 @@ const DashboardOverview: React.FC = () => {
   );
 };
 
-// Enhanced Products Management Component with Real-time Sync
+// Enhanced Products Management Component with Real-time Sync and Improved Button Logic
 const ProductsManagement: React.FC = () => {
   const { products, loading, error, createProduct, updateProduct, deleteProduct, refetch } = useAdminProducts();
   const [categories, setCategories] = useState<any[]>([]);
@@ -243,6 +243,10 @@ const ProductsManagement: React.FC = () => {
 
   const [productImage, setProductImage] = useState<string>('');
   const [uploading, setUploading] = useState(false);
+  const [operationStatus, setOperationStatus] = useState<{
+    type: 'success' | 'error' | 'info' | null;
+    message: string;
+  }>({ type: null, message: '' });
 
   // Enhanced real-time sync effect
   useEffect(() => {
@@ -251,6 +255,11 @@ const ProductsManagement: React.FC = () => {
     const handleProductChange = (event: CustomEvent) => {
       console.log('🔧 Admin Products: Product change event received:', event.detail);
       // Products will automatically refresh via useAdminProducts hook
+      setOperationStatus({
+        type: 'info',
+        message: 'Product list updated automatically'
+      });
+      setTimeout(() => setOperationStatus({ type: null, message: '' }), 3000);
     };
 
     const handleForceRefresh = () => {
@@ -287,22 +296,42 @@ const ProductsManagement: React.FC = () => {
 
   const handleImageUploaded = (url: string) => {
     setProductImage(url);
+    console.log('📷 Image uploaded:', url);
   };
 
   const handleImageRemoved = () => {
     setProductImage('');
+    console.log('📷 Image removed');
   };
 
+  // Enhanced form submission with comprehensive error handling and real-time sync
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setUploading(true);
     setSchemaError(null);
+    setOperationStatus({ type: null, message: '' });
 
     try {
+      console.log('🔧 Admin: Starting form submission...');
+      
+      // Validate form data
+      if (!formData.name.trim()) {
+        throw new Error('Product name is required');
+      }
+      if (!formData.description.trim()) {
+        throw new Error('Product description is required');
+      }
+      if (!formData.price || parseFloat(formData.price) <= 0) {
+        throw new Error('Valid product price is required');
+      }
+      if (!formData.category_id) {
+        throw new Error('Product category is required');
+      }
+
       const productData = {
         id: formData.id || `product-${Date.now()}`,
-        name: formData.name,
-        description: formData.description,
+        name: formData.name.trim(),
+        description: formData.description.trim(),
         price: parseFloat(formData.price),
         image: productImage || '/images/placeholder.jpg',
         category_id: formData.category_id,
@@ -312,29 +341,73 @@ const ProductsManagement: React.FC = () => {
         featured: formData.featured
       };
 
-      console.log('🔧 Admin: Submitting product:', productData);
+      console.log('🔧 Admin: Submitting product data:', productData);
 
       if (editingProduct) {
+        // UPDATE PRODUCT LOGIC
+        console.log('📝 Admin: Updating existing product:', editingProduct.id);
+        setOperationStatus({ type: 'info', message: 'Updating product...' });
+        
         await updateProduct(editingProduct.id, productData);
+        
         console.log('✅ Admin: Product updated successfully');
+        setOperationStatus({ 
+          type: 'success', 
+          message: `Product "${productData.name}" updated successfully! Changes are now live on the website.` 
+        });
+        
+        // Trigger immediate refresh on main website
+        window.dispatchEvent(new CustomEvent('productUpdated', { 
+          detail: { id: editingProduct.id, product: productData } 
+        }));
+        window.dispatchEvent(new CustomEvent('forceProductRefresh'));
+        
       } else {
+        // CREATE PRODUCT LOGIC
+        console.log('🚀 Admin: Creating new product');
+        setOperationStatus({ type: 'info', message: 'Creating product...' });
+        
         await createProduct(productData, productImage ? [productImage] : []);
+        
         console.log('✅ Admin: Product created successfully');
+        setOperationStatus({ 
+          type: 'success', 
+          message: `Product "${productData.name}" created successfully! It's now available on the website.` 
+        });
+        
+        // Trigger immediate refresh on main website
+        window.dispatchEvent(new CustomEvent('productCreated', { 
+          detail: { product: productData } 
+        }));
+        window.dispatchEvent(new CustomEvent('forceProductRefresh'));
       }
 
+      // Reset form and close modal
       resetForm();
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setOperationStatus({ type: null, message: '' });
+      }, 5000);
+
     } catch (error) {
       console.error('❌ Admin: Error saving product:', error);
       
-      // Check for schema-related errors
+      // Handle specific error types
       if (error instanceof Error) {
         if (error.message.includes('schema cache') || error.message.includes('column not found')) {
           setSchemaError('Database schema issue detected. Please refresh your Supabase schema cache in the dashboard, then try again.');
         } else {
-          alert(`Error saving product: ${error.message}`);
+          setOperationStatus({
+            type: 'error',
+            message: `Failed to ${editingProduct ? 'update' : 'create'} product: ${error.message}`
+          });
         }
       } else {
-        alert('Error saving product. Please try again.');
+        setOperationStatus({
+          type: 'error',
+          message: `Failed to ${editingProduct ? 'update' : 'create'} product. Please try again.`
+        });
       }
     } finally {
       setUploading(false);
@@ -360,6 +433,7 @@ const ProductsManagement: React.FC = () => {
   };
 
   const handleEdit = (product: any) => {
+    console.log('📝 Admin: Editing product:', product.id);
     setFormData({
       id: product.id,
       name: product.name,
@@ -375,24 +449,55 @@ const ProductsManagement: React.FC = () => {
     setEditingProduct(product);
     setShowAddForm(true);
     setSchemaError(null);
+    setOperationStatus({ type: null, message: '' });
   };
 
+  // Enhanced delete function with real-time sync
   const handleDelete = async (productId: string) => {
-    if (confirm('Are you sure you want to delete this product?')) {
+    const product = products.find(p => p.id === productId);
+    const productName = product?.name || 'Unknown Product';
+    
+    if (confirm(`Are you sure you want to delete "${productName}"? This action cannot be undone.`)) {
       try {
-        console.log('🔧 Admin: Deleting product:', productId);
+        console.log('🗑️ Admin: Deleting product:', productId);
+        setOperationStatus({ type: 'info', message: 'Deleting product...' });
+        
         await deleteProduct(productId);
+        
         console.log('✅ Admin: Product deleted successfully');
+        setOperationStatus({ 
+          type: 'success', 
+          message: `Product "${productName}" deleted successfully! It has been removed from the website.` 
+        });
+        
+        // Trigger immediate refresh on main website
+        window.dispatchEvent(new CustomEvent('productDeleted', { 
+          detail: { id: productId } 
+        }));
+        window.dispatchEvent(new CustomEvent('forceProductRefresh'));
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => {
+          setOperationStatus({ type: null, message: '' });
+        }, 5000);
+        
       } catch (error) {
         console.error('❌ Admin: Error deleting product:', error);
-        alert('Error deleting product. Please try again.');
+        setOperationStatus({
+          type: 'error',
+          message: `Failed to delete product "${productName}". Please try again.`
+        });
       }
     }
   };
 
   const handleManualRefresh = () => {
     console.log('🔄 Admin: Manual refresh triggered');
+    setOperationStatus({ type: 'info', message: 'Refreshing product list...' });
     refetch();
+    setTimeout(() => {
+      setOperationStatus({ type: null, message: '' });
+    }, 2000);
   };
 
   const filteredProducts = products.filter(product => {
@@ -459,6 +564,22 @@ const ProductsManagement: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Operation Status Display */}
+      {operationStatus.type && (
+        <div className={`p-4 rounded-lg border ${
+          operationStatus.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200' :
+          operationStatus.type === 'error' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200' :
+          'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            {operationStatus.type === 'success' && <CheckCircle size={20} />}
+            {operationStatus.type === 'error' && <AlertCircle size={20} />}
+            {operationStatus.type === 'info' && <Clock size={20} />}
+            <span className="font-medium">{operationStatus.message}</span>
+          </div>
+        </div>
+      )}
 
       {/* Schema Error Alert */}
       {schemaError && (
@@ -668,24 +789,24 @@ const ProductsManagement: React.FC = () => {
                 <button
                   type="submit"
                   disabled={uploading}
-                  className="flex items-center gap-2 px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed justify-center"
+                  className="flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed justify-center font-semibold"
                 >
                   {uploading ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Saving...
+                      {editingProduct ? 'Updating...' : 'Creating...'}
                     </>
                   ) : (
                     <>
                       <Save size={20} />
-                      {editingProduct ? 'Update' : 'Create'} Product
+                      {editingProduct ? 'Update Product' : 'Create Product'}
                     </>
                   )}
                 </button>
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="px-6 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="px-6 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                   Cancel
                 </button>
@@ -749,12 +870,14 @@ const ProductsManagement: React.FC = () => {
                       <button
                         onClick={() => handleEdit(product)}
                         className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        title="Edit product"
                       >
                         <Edit size={16} />
                       </button>
                       <button
                         onClick={() => handleDelete(product.id)}
                         className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title="Delete product"
                       >
                         <Trash2 size={16} />
                       </button>

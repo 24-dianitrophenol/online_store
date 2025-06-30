@@ -18,7 +18,7 @@ const isSupabaseConfigured = () => {
   return url && key && !url.includes('your-project-ref') && !key.includes('your-anon-key')
 }
 
-// Real-time event dispatcher for immediate UI updates
+// Enhanced Real-time event dispatcher for immediate UI updates
 class ProductEventDispatcher {
   private static instance: ProductEventDispatcher;
   
@@ -29,45 +29,80 @@ class ProductEventDispatcher {
     return ProductEventDispatcher.instance;
   }
 
-  // Dispatch product created event
+  // Dispatch product created event with immediate database sync
   productCreated(product: any) {
     console.log('🚀 Product created event dispatched:', product.id);
+    
+    // Dispatch multiple events for comprehensive coverage
     window.dispatchEvent(new CustomEvent('productCreated', { detail: product }));
     window.dispatchEvent(new CustomEvent('refreshProducts'));
-    // Force immediate refresh on both dashboard and website
+    window.dispatchEvent(new CustomEvent('forceProductRefresh'));
+    
+    // Force immediate refresh on both dashboard and website with staggered timing
     this.triggerImmediateRefresh();
+    
+    // Log success for debugging
+    console.log('✅ Product creation events dispatched successfully');
   }
 
-  // Dispatch product updated event
+  // Dispatch product updated event with immediate database sync
   productUpdated(productId: string, updates: any) {
     console.log('📝 Product updated event dispatched:', productId);
+    
+    // Dispatch multiple events for comprehensive coverage
     window.dispatchEvent(new CustomEvent('productUpdated', { detail: { id: productId, updates } }));
     window.dispatchEvent(new CustomEvent('refreshProducts'));
-    // Force immediate refresh on both dashboard and website
+    window.dispatchEvent(new CustomEvent('forceProductRefresh'));
+    
+    // Force immediate refresh on both dashboard and website with staggered timing
     this.triggerImmediateRefresh();
+    
+    // Log success for debugging
+    console.log('✅ Product update events dispatched successfully');
   }
 
-  // Dispatch product deleted event
+  // Dispatch product deleted event with immediate database sync
   productDeleted(productId: string) {
     console.log('🗑️ Product deleted event dispatched:', productId);
+    
+    // Dispatch multiple events for comprehensive coverage
     window.dispatchEvent(new CustomEvent('productDeleted', { detail: { id: productId } }));
     window.dispatchEvent(new CustomEvent('refreshProducts'));
-    // Force immediate refresh on both dashboard and website
+    window.dispatchEvent(new CustomEvent('forceProductRefresh'));
+    
+    // Force immediate refresh on both dashboard and website with staggered timing
     this.triggerImmediateRefresh();
+    
+    // Log success for debugging
+    console.log('✅ Product deletion events dispatched successfully');
   }
 
-  // Force immediate refresh across all components
+  // Force immediate refresh across all components with multiple attempts
   private triggerImmediateRefresh() {
-    // Trigger multiple refresh events to ensure all components update
+    console.log('⚡ Triggering immediate refresh across all components...');
+    
+    // Immediate refresh
+    window.dispatchEvent(new CustomEvent('forceProductRefresh'));
+    window.dispatchEvent(new CustomEvent('refreshProducts'));
+    
+    // Staggered refreshes to ensure all components catch the events
     setTimeout(() => {
+      console.log('⚡ Triggering 100ms delayed refresh...');
       window.dispatchEvent(new CustomEvent('forceProductRefresh'));
       window.dispatchEvent(new CustomEvent('refreshProducts'));
     }, 100);
     
     setTimeout(() => {
+      console.log('⚡ Triggering 500ms delayed refresh...');
       window.dispatchEvent(new CustomEvent('forceProductRefresh'));
       window.dispatchEvent(new CustomEvent('refreshProducts'));
     }, 500);
+    
+    setTimeout(() => {
+      console.log('⚡ Triggering 1000ms delayed refresh...');
+      window.dispatchEvent(new CustomEvent('forceProductRefresh'));
+      window.dispatchEvent(new CustomEvent('refreshProducts'));
+    }, 1000);
   }
 }
 
@@ -79,7 +114,7 @@ export const adminAuthService = {
     }
 
     try {
-      console.log('Attempting admin authentication...')
+      console.log('🔐 Attempting admin authentication...')
       
       // Try the enhanced function first, fallback to standard if not available
       let data, error;
@@ -92,8 +127,9 @@ export const adminAuthService = {
           })
         data = result.data;
         error = result.error;
+        console.log('✅ Enhanced authentication function used successfully');
       } catch (enhancedError) {
-        console.log('Enhanced function not available, trying standard function...')
+        console.log('⚠️ Enhanced function not available, trying standard function...')
         const result = await supabase
           .rpc('authenticate_admin', { 
             p_username: username, 
@@ -101,10 +137,11 @@ export const adminAuthService = {
           })
         data = result.data;
         error = result.error;
+        console.log('✅ Standard authentication function used successfully');
       }
 
       if (error) {
-        console.error('Authentication RPC error:', error)
+        console.error('❌ Authentication RPC error:', error)
         throw new Error('Invalid username or password')
       }
 
@@ -114,7 +151,7 @@ export const adminAuthService = {
 
       // Parse the JSON response if it's a string
       const admin = typeof data === 'string' ? JSON.parse(data) : data
-      console.log('Admin authenticated successfully:', admin.username)
+      console.log('✅ Admin authenticated successfully:', admin.username)
 
       // Store admin info in localStorage with authentication flag
       localStorage.setItem('admin_user', JSON.stringify(admin))
@@ -124,18 +161,19 @@ export const adminAuthService = {
       // Set admin context in Supabase session
       try {
         await supabase.rpc('set_admin_context')
+        console.log('✅ Admin context set successfully');
       } catch (contextError) {
-        console.warn('Failed to set admin context:', contextError)
+        console.warn('⚠️ Failed to set admin context:', contextError)
       }
 
       return { user: null, admin }
     } catch (error) {
-      console.error('Sign in error:', error)
+      console.error('❌ Sign in error:', error)
       // Clear any existing admin context
       try {
         await supabase.rpc('clear_admin_context')
       } catch (clearError) {
-        console.warn('Failed to clear admin context:', clearError)
+        console.warn('⚠️ Failed to clear admin context:', clearError)
       }
       throw error
     }
@@ -154,10 +192,12 @@ export const adminAuthService = {
       // Sign out from Supabase auth
       const { error } = await supabase.auth.signOut()
       if (error) {
-        console.warn('Supabase signout error:', error)
+        console.warn('⚠️ Supabase signout error:', error)
       }
+      
+      console.log('✅ Admin signed out successfully');
     } catch (error) {
-      console.error('Sign out error:', error)
+      console.error('❌ Sign out error:', error)
       throw error
     }
   },
@@ -180,18 +220,20 @@ export const adminAuthService = {
           // Set admin context for this session
           try {
             await supabase.rpc('set_admin_context')
+            console.log('✅ Admin context restored for existing session');
           } catch (error) {
-            console.warn('Failed to set admin context:', error)
+            console.warn('⚠️ Failed to set admin context:', error)
           }
           return admin
         } else {
           // Session expired, clear it
+          console.log('⚠️ Admin session expired, clearing...');
           this.signOut()
         }
       }
       return null
     } catch (error) {
-      console.error('Get current admin error:', error)
+      console.error('❌ Get current admin error:', error)
       return null
     }
   }
@@ -205,15 +247,16 @@ const getAuthenticatedClient = async () => {
     // Set admin context for this session
     try {
       await supabase.rpc('set_admin_context')
+      console.log('✅ Admin context set for authenticated client');
     } catch (error) {
-      console.warn('Failed to set admin context:', error)
+      console.warn('⚠️ Failed to set admin context:', error)
     }
   }
   
   return supabase
 }
 
-// Product services with enhanced error handling, validation, and real-time sync
+// Enhanced Product services with comprehensive error handling, validation, and real-time sync
 export const productService = {
   async getAll() {
     if (!isSupabaseConfigured()) {
@@ -221,6 +264,8 @@ export const productService = {
     }
 
     try {
+      console.log('📦 Fetching all products from database...');
+      
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -247,14 +292,14 @@ export const productService = {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error fetching products:', error)
+        console.error('❌ Error fetching products:', error)
         throw new Error(`Failed to fetch products: ${error.message}`)
       }
       
       console.log(`✅ Fetched ${data?.length || 0} products from database`)
       return data || []
     } catch (error) {
-      console.error('Error fetching products:', error)
+      console.error('❌ Error fetching products:', error)
       throw error
     }
   },
@@ -265,6 +310,8 @@ export const productService = {
     }
 
     try {
+      console.log('🔧 Fetching all admin products from database...');
+      
       const client = await getAuthenticatedClient()
       const { data, error } = await client
         .from('products')
@@ -291,14 +338,14 @@ export const productService = {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error fetching admin products:', error)
+        console.error('❌ Error fetching admin products:', error)
         throw new Error(`Failed to fetch products: ${error.message}`)
       }
       
       console.log(`✅ Fetched ${data?.length || 0} admin products from database`)
       return data || []
     } catch (error) {
-      console.error('Error fetching admin products:', error)
+      console.error('❌ Error fetching admin products:', error)
       throw error
     }
   },
@@ -309,6 +356,8 @@ export const productService = {
     }
 
     try {
+      console.log('📦 Fetching product by ID:', id);
+      
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -335,13 +384,14 @@ export const productService = {
         .single()
 
       if (error) {
-        console.error('Error fetching product:', error)
+        console.error('❌ Error fetching product:', error)
         throw new Error(`Failed to fetch product: ${error.message}`)
       }
       
+      console.log('✅ Product fetched successfully:', data.id);
       return data
     } catch (error) {
-      console.error('Error fetching product:', error)
+      console.error('❌ Error fetching product:', error)
       throw error
     }
   },
@@ -385,19 +435,19 @@ export const productService = {
       })
 
       if (error) {
-        console.error('Product creation error:', error)
+        console.error('❌ Product creation error:', error)
         throw new Error(`Failed to create product: ${error.message}`)
       }
 
       console.log('✅ Product created successfully:', data)
       
-      // Trigger immediate real-time sync
+      // Trigger immediate real-time sync across all components
       const dispatcher = ProductEventDispatcher.getInstance();
       dispatcher.productCreated(data);
       
       return data
     } catch (error) {
-      console.error('Error creating product:', error)
+      console.error('❌ Error creating product:', error)
       throw error
     }
   },
@@ -429,19 +479,19 @@ export const productService = {
       })
 
       if (error) {
-        console.error('Product update error:', error)
+        console.error('❌ Product update error:', error)
         throw new Error(`Failed to update product: ${error.message}`)
       }
 
       console.log('✅ Product updated successfully:', data)
       
-      // Trigger immediate real-time sync
+      // Trigger immediate real-time sync across all components
       const dispatcher = ProductEventDispatcher.getInstance();
       dispatcher.productUpdated(id, updates);
       
       return data
     } catch (error) {
-      console.error('Error updating product:', error)
+      console.error('❌ Error updating product:', error)
       throw error
     }
   },
@@ -462,19 +512,19 @@ export const productService = {
         .eq('id', id)
 
       if (error) {
-        console.error('Product deletion error:', error)
+        console.error('❌ Product deletion error:', error)
         throw new Error(`Failed to delete product: ${error.message}`)
       }
       
       console.log('✅ Product deleted successfully:', id)
       
-      // Trigger immediate real-time sync
+      // Trigger immediate real-time sync across all components
       const dispatcher = ProductEventDispatcher.getInstance();
       dispatcher.productDeleted(id);
       
       return true
     } catch (error) {
-      console.error('Error deleting product:', error)
+      console.error('❌ Error deleting product:', error)
       throw error
     }
   }
@@ -488,6 +538,8 @@ export const categoryService = {
     }
 
     try {
+      console.log('📂 Fetching all categories...');
+      
       const { data, error } = await supabase
         .from('categories')
         .select('*')
@@ -495,13 +547,14 @@ export const categoryService = {
         .order('display_order', { ascending: true })
 
       if (error) {
-        console.error('Error fetching categories:', error)
+        console.error('❌ Error fetching categories:', error)
         throw new Error(`Failed to fetch categories: ${error.message}`)
       }
       
+      console.log(`✅ Fetched ${data?.length || 0} categories`);
       return data || []
     } catch (error) {
-      console.error('Error fetching categories:', error)
+      console.error('❌ Error fetching categories:', error)
       throw error
     }
   },
@@ -512,6 +565,8 @@ export const categoryService = {
     }
 
     try {
+      console.log('🔧 Fetching all admin categories...');
+      
       const client = await getAuthenticatedClient()
       const { data, error } = await client
         .from('categories')
@@ -519,13 +574,14 @@ export const categoryService = {
         .order('display_order', { ascending: true })
 
       if (error) {
-        console.error('Error fetching admin categories:', error)
+        console.error('❌ Error fetching admin categories:', error)
         throw new Error(`Failed to fetch categories: ${error.message}`)
       }
       
+      console.log(`✅ Fetched ${data?.length || 0} admin categories`);
       return data || []
     } catch (error) {
-      console.error('Error fetching admin categories:', error)
+      console.error('❌ Error fetching admin categories:', error)
       throw error
     }
   }
@@ -561,13 +617,14 @@ export const productImageService = {
         .single()
 
       if (error) {
-        console.error('Error adding product image:', error)
+        console.error('❌ Error adding product image:', error)
         throw new Error(`Failed to add product image: ${error.message}`)
       }
       
+      console.log('✅ Product image added successfully');
       return data
     } catch (error) {
-      console.error('Error adding product image:', error)
+      console.error('❌ Error adding product image:', error)
       throw error
     }
   }
@@ -589,13 +646,13 @@ export const inventoryService = {
         .single()
 
       if (error) {
-        console.error('Error fetching inventory:', error)
+        console.error('❌ Error fetching inventory:', error)
         throw new Error(`Failed to fetch inventory: ${error.message}`)
       }
       
       return data
     } catch (error) {
-      console.error('Error fetching inventory:', error)
+      console.error('❌ Error fetching inventory:', error)
       throw error
     }
   },
@@ -615,13 +672,13 @@ export const inventoryService = {
         .single()
 
       if (error) {
-        console.error('Error updating inventory:', error)
+        console.error('❌ Error updating inventory:', error)
         throw new Error(`Failed to update inventory: ${error.message}`)
       }
       
       return data
     } catch (error) {
-      console.error('Error updating inventory:', error)
+      console.error('❌ Error updating inventory:', error)
       throw error
     }
   },
@@ -652,13 +709,13 @@ export const inventoryService = {
       const { data, error } = await query
 
       if (error) {
-        console.error('Error fetching low stock items:', error)
+        console.error('❌ Error fetching low stock items:', error)
         throw new Error(`Failed to fetch low stock items: ${error.message}`)
       }
       
       return data || []
     } catch (error) {
-      console.error('Error fetching low stock items:', error)
+      console.error('❌ Error fetching low stock items:', error)
       return []
     }
   }
@@ -689,13 +746,13 @@ export const orderService = {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error fetching orders:', error)
+        console.error('❌ Error fetching orders:', error)
         throw new Error(`Failed to fetch orders: ${error.message}`)
       }
       
       return data || []
     } catch (error) {
-      console.error('Error fetching orders:', error)
+      console.error('❌ Error fetching orders:', error)
       return []
     }
   },
@@ -714,13 +771,13 @@ export const orderService = {
         .limit(limit)
 
       if (error) {
-        console.error('Error fetching recent orders:', error)
+        console.error('❌ Error fetching recent orders:', error)
         throw new Error(`Failed to fetch recent orders: ${error.message}`)
       }
       
       return data || []
     } catch (error) {
-      console.error('Error fetching recent orders:', error)
+      console.error('❌ Error fetching recent orders:', error)
       return []
     }
   },
@@ -743,13 +800,13 @@ export const orderService = {
         .single()
 
       if (error) {
-        console.error('Error updating order status:', error)
+        console.error('❌ Error updating order status:', error)
         throw new Error(`Failed to update order status: ${error.message}`)
       }
       
       return data
     } catch (error) {
-      console.error('Error updating order status:', error)
+      console.error('❌ Error updating order status:', error)
       throw error
     }
   }
@@ -793,7 +850,7 @@ export const analyticsService = {
         recentOrders
       }
     } catch (error) {
-      console.error('Error fetching dashboard stats:', error)
+      console.error('❌ Error fetching dashboard stats:', error)
       return {
         today: { total_revenue: 0, total_orders: 0, total_customers: 0 },
         monthly: [],
@@ -827,24 +884,24 @@ export const analyticsService = {
       const { data, error } = await query
 
       if (error) {
-        console.error('Error fetching business analytics:', error)
+        console.error('❌ Error fetching business analytics:', error)
         throw new Error(`Failed to fetch business analytics: ${error.message}`)
       }
       
       return data || []
     } catch (error) {
-      console.error('Error fetching business analytics:', error)
+      console.error('❌ Error fetching business analytics:', error)
       return []
     }
   }
 }
 
-// Enhanced real-time sync utilities with immediate updates
+// Enhanced real-time sync utilities with immediate updates and comprehensive logging
 export const syncService = {
   // Subscribe to product changes for real-time updates
   subscribeToProductChanges(callback: (payload: any) => void) {
     if (!isSupabaseConfigured()) {
-      console.warn('Real-time sync not available without Supabase configuration')
+      console.warn('⚠️ Real-time sync not available without Supabase configuration')
       return () => {}
     }
 
@@ -858,7 +915,7 @@ export const syncService = {
           console.log('📡 Real-time product change received:', payload)
           callback(payload)
           
-          // Trigger immediate UI refresh
+          // Trigger immediate UI refresh with enhanced event dispatching
           const dispatcher = ProductEventDispatcher.getInstance();
           if (payload.eventType === 'INSERT') {
             dispatcher.productCreated(payload.new);
@@ -879,22 +936,40 @@ export const syncService = {
     }
   },
 
-  // Trigger manual refresh across all components
+  // Trigger manual refresh across all components with enhanced coverage
   triggerProductRefresh() {
-    console.log('🔄 Triggering manual product refresh across all components')
+    console.log('🔄 Triggering comprehensive product refresh across all components...')
+    
+    // Dispatch multiple event types for maximum coverage
     window.dispatchEvent(new CustomEvent('refreshProducts'))
     window.dispatchEvent(new CustomEvent('forceProductRefresh'))
+    window.dispatchEvent(new CustomEvent('productListRefresh'))
+    window.dispatchEvent(new CustomEvent('adminProductRefresh'))
     
-    // Trigger multiple times to ensure all components catch the event
+    // Trigger multiple times with staggered timing to ensure all components catch the events
     setTimeout(() => {
+      console.log('🔄 Triggering 100ms delayed refresh...')
       window.dispatchEvent(new CustomEvent('refreshProducts'))
       window.dispatchEvent(new CustomEvent('forceProductRefresh'))
+      window.dispatchEvent(new CustomEvent('productListRefresh'))
+      window.dispatchEvent(new CustomEvent('adminProductRefresh'))
     }, 100)
     
     setTimeout(() => {
+      console.log('🔄 Triggering 500ms delayed refresh...')
       window.dispatchEvent(new CustomEvent('refreshProducts'))
       window.dispatchEvent(new CustomEvent('forceProductRefresh'))
+      window.dispatchEvent(new CustomEvent('productListRefresh'))
+      window.dispatchEvent(new CustomEvent('adminProductRefresh'))
     }, 500)
+    
+    setTimeout(() => {
+      console.log('🔄 Triggering 1000ms delayed refresh...')
+      window.dispatchEvent(new CustomEvent('refreshProducts'))
+      window.dispatchEvent(new CustomEvent('forceProductRefresh'))
+      window.dispatchEvent(new CustomEvent('productListRefresh'))
+      window.dispatchEvent(new CustomEvent('adminProductRefresh'))
+    }, 1000)
   }
 }
 

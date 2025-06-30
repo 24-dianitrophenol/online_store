@@ -84,7 +84,6 @@ const HomePage: React.FC = () => {
     refetchProducts();
   };
 
-  // Show loading state
   if (productsLoading || categoriesLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -107,27 +106,6 @@ const HomePage: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-400">
             Please connect to Supabase to view products. Click the "Connect to Supabase" button in the top right corner.
           </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show error state with retry option
-  if (productsError || categoriesError) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4 max-w-md">
-          <AlertCircle className="mx-auto text-red-500" size={48} />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Error Loading Products</h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            {productsError || categoriesError}
-          </p>
-          <button
-            onClick={handleManualRefresh}
-            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            Try Again
-          </button>
         </div>
       </div>
     );
@@ -256,6 +234,29 @@ const HomePage: React.FC = () => {
               onChange={setSelectedCategory}
             />
           </div>
+
+          {/* Error Display */}
+          {(productsError || categoriesError) && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
+                <div>
+                  <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                    Error loading data from database
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-300">
+                    {productsError || categoriesError}
+                  </p>
+                  <button
+                    onClick={handleManualRefresh}
+                    className="mt-2 text-xs text-red-600 dark:text-red-300 underline hover:no-underline"
+                  >
+                    Try refreshing
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Products Grid */}
           <ProductGrid 

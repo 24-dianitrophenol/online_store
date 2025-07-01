@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, User, Eye, EyeOff, ArrowLeft, Shield } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, ArrowLeft, Shield, AlertCircle } from 'lucide-react';
 import { adminAuthService } from '../services/database';
 
 const AdminLoginPage: React.FC = () => {
@@ -9,6 +9,7 @@ const AdminLoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [debugInfo, setDebugInfo] = useState('');
   const navigate = useNavigate();
 
   // Check if already logged in
@@ -31,17 +32,31 @@ const AdminLoginPage: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setDebugInfo('');
 
     try {
+      console.log('🔐 Starting login process...');
+      setDebugInfo('Attempting authentication...');
+      
       const { admin } = await adminAuthService.signIn(username, password);
+      
+      console.log('✅ Login successful:', admin);
+      setDebugInfo('Authentication successful! Redirecting...');
       
       // Store admin info in localStorage for session management
       localStorage.setItem('admin_user', JSON.stringify(admin));
       
-      // Redirect to admin dashboard
-      navigate('/admin-user/dashboard');
+      // Small delay to show success message
+      setTimeout(() => {
+        // Redirect to admin dashboard
+        navigate('/admin-user/dashboard');
+      }, 1000);
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      console.error('❌ Login failed:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Login failed';
+      setError(errorMessage);
+      setDebugInfo(`Error: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -74,6 +89,16 @@ const AdminLoginPage: React.FC = () => {
             </p>
           </div>
 
+          {/* Debug Info */}
+          {debugInfo && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
+              <p className="text-blue-600 dark:text-blue-400 text-sm flex items-center gap-2">
+                <AlertCircle size={16} />
+                {debugInfo}
+              </p>
+            </div>
+          )}
+
           {/* Error Message */}
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6">
@@ -83,6 +108,17 @@ const AdminLoginPage: React.FC = () => {
               </p>
             </div>
           )}
+
+          {/* Credentials Info */}
+          <div className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-4 mb-6">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Default Credentials:
+            </h3>
+            <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <p><strong>Username:</strong> admin</p>
+              <p><strong>Password:</strong> admin123</p>
+            </div>
+          </div>
 
           {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-6">

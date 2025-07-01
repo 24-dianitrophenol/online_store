@@ -47,7 +47,7 @@ const dispatchProductEvent = (eventType: string, data: any) => {
   }, 100)
 }
 
-// Admin Authentication with enhanced error handling
+// Admin Authentication with enhanced error handling and debugging
 export const adminAuthService = {
   async signIn(username: string, password: string) {
     if (!isSupabaseConfigured()) {
@@ -55,9 +55,19 @@ export const adminAuthService = {
     }
 
     try {
-      console.log('Attempting admin authentication...')
+      console.log('🔐 Attempting admin authentication for username:', username)
       
-      // Use the correct authentication function name
+      // First, test if admin exists
+      const { data: testData, error: testError } = await supabase
+        .rpc('test_admin_exists')
+      
+      if (testError) {
+        console.error('❌ Test admin exists error:', testError)
+      } else {
+        console.log('📋 Admin test result:', testData)
+      }
+      
+      // Try the main authentication function
       const { data, error } = await supabase
         .rpc('authenticate_admin_enhanced', { 
           p_username: username, 
@@ -65,17 +75,37 @@ export const adminAuthService = {
         })
 
       if (error) {
-        console.error('Authentication RPC error:', error)
-        throw new Error('Invalid username or password')
+        console.error('❌ Authentication RPC error:', error)
+        
+        // Try alternative function names
+        console.log('🔄 Trying alternative authentication function...')
+        const { data: altData, error: altError } = await supabase
+          .rpc('authenticate_admin', { 
+            p_username: username, 
+            p_password: password 
+          })
+        
+        if (altError) {
+          console.error('❌ Alternative authentication error:', altError)
+          throw new Error(`Authentication failed: ${error.message || 'Invalid credentials'}`)
+        }
+        
+        if (!altData) {
+          throw new Error('Authentication failed: No data returned')
+        }
+        
+        console.log('✅ Alternative authentication successful')
+        const admin = typeof altData === 'string' ? JSON.parse(altData) : altData
+        return { user: null, admin }
       }
 
       if (!data) {
-        throw new Error('Invalid username or password')
+        throw new Error('Authentication failed: No data returned')
       }
 
       // Parse the JSON response if it's a string
       const admin = typeof data === 'string' ? JSON.parse(data) : data
-      console.log('Admin authenticated successfully:', admin.username)
+      console.log('✅ Admin authenticated successfully:', admin.username)
 
       // Store admin info in localStorage with authentication flag
       localStorage.setItem('admin_user', JSON.stringify(admin))
@@ -84,13 +114,20 @@ export const adminAuthService = {
 
       return { user: null, admin }
     } catch (error) {
-      console.error('Sign in error:', error)
+      console.error('❌ Sign in error:', error)
+      
       // Clear any existing admin context
       try {
         await supabase.rpc('clear_admin_context')
       } catch (clearError) {
         console.warn('Failed to clear admin context:', clearError)
       }
+      
+      // Clear localStorage
+      localStorage.removeItem('admin_user')
+      localStorage.removeItem('admin_authenticated')
+      localStorage.removeItem('admin_session_id')
+      
       throw error
     }
   },
